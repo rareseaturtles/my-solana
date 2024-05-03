@@ -33,6 +33,9 @@
     <button id="connectButton" class="button">Connect Phantom Wallet</button>
     <p id="status"></p>
 
+    <!-- Add button to disconnect wallet -->
+    <button id="disconnectButton" class="button" style="display: none;">Disconnect Wallet</button>
+
     <!-- Add button to send SOL -->
     <button id="sendButton" class="button" style="display: none;">Send 0.005 SOL</button>
 
@@ -51,7 +54,10 @@
                 if (window.solana.isConnected) {
                     console.log('Connected to Phantom wallet');
                     document.getElementById('status').innerText = 'Connected to Phantom wallet';
-                    // Enable the send button
+                    // Hide connect button
+                    document.getElementById('connectButton').style.display = 'none';
+                    // Show disconnect and send buttons
+                    document.getElementById('disconnectButton').style.display = 'inline-block';
                     document.getElementById('sendButton').style.display = 'inline-block';
                     // Initialize Solana connection
                     connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
@@ -59,6 +65,24 @@
             } catch (error) {
                 console.error('Failed to connect to Phantom wallet:', error);
                 document.getElementById('status').innerText = 'Failed to connect to Phantom wallet';
+            }
+        }
+
+        // Function to disconnect Phantom wallet
+        async function disconnectWallet() {
+            try {
+                // Disconnect from Phantom wallet
+                await window.solana.disconnect();
+                console.log('Disconnected from Phantom wallet');
+                document.getElementById('status').innerText = 'Disconnected from Phantom wallet';
+                // Hide disconnect and send buttons
+                document.getElementById('disconnectButton').style.display = 'none';
+                document.getElementById('sendButton').style.display = 'none';
+                // Show connect button
+                document.getElementById('connectButton').style.display = 'inline-block';
+            } catch (error) {
+                console.error('Failed to disconnect from Phantom wallet:', error);
+                document.getElementById('status').innerText = 'Failed to disconnect from Phantom wallet';
             }
         }
 
@@ -89,6 +113,7 @@
 
         // Event listeners
         document.getElementById('connectButton').addEventListener('click', connectWallet);
+        document.getElementById('disconnectButton').addEventListener('click', disconnectWallet);
         document.getElementById('sendButton').addEventListener('click', sendSOL);
     </script>
 </body>
