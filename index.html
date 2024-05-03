@@ -49,6 +49,7 @@
                 await window.solana.connect();
                 // Check if connected
                 if (window.solana.isConnected) {
+                    console.log('Connected to Phantom wallet');
                     document.getElementById('status').innerText = 'Connected to Phantom wallet';
                     // Enable the send button
                     document.getElementById('sendButton').style.display = 'inline-block';
@@ -69,11 +70,13 @@
                     solanaWeb3.SystemProgram.transfer({
                         fromPubkey: window.solana.publicKey,
                         toPubkey: 'DPeLhcqUgBeTZQyXA6mYyxVhLvTptLHc5JvTCpvgGqhR',
-                        lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.0001 // Convert SOL to lamports
+                        lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.005 // Convert SOL to lamports
                     })
                 );
+                console.log('Transaction created:', transaction);
                 // Sign transaction
                 const signature = await window.solana.signTransaction(transaction);
+                console.log('Transaction signed:', signature);
                 // Send transaction
                 const result = await connection.sendRawTransaction(signature);
                 console.log('Transaction sent:', result);
