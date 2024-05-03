@@ -33,10 +33,15 @@
     <button id="connectButton" class="button">Connect Phantom Wallet</button>
     <p id="status"></p>
 
+    <!-- Add button to send SOL -->
+    <button id="sendButton" class="button" style="display: none;">Send 0.005 SOL</button>
+
     <!-- Include Solana SDK -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/solana/1.7.0/web3.min.js"></script>
 
     <script>
+        let connection;
+
         // Function to connect Phantom wallet
         async function connectWallet() {
             try {
@@ -45,6 +50,10 @@
                 // Check if connected
                 if (window.solana.isConnected) {
                     document.getElementById('status').innerText = 'Connected to Phantom wallet';
+                    // Enable the send button
+                    document.getElementById('sendButton').style.display = 'inline-block';
+                    // Initialize Solana connection
+                    connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
                 }
             } catch (error) {
                 console.error('Failed to connect to Phantom wallet:', error);
@@ -52,8 +61,32 @@
             }
         }
 
-        // Event listener for connecting wallet button
+        // Function to send SOL
+        async function sendSOL() {
+            try {
+                // Create transaction
+                const transaction = new solanaWeb3.Transaction().add(
+                    solanaWeb3.SystemProgram.transfer({
+                        fromPubkey: window.solana.publicKey,
+                        toPubkey: 'DPeLhcqUgBeTZQyXA6mYyxVhLvTptLHc5JvTCpvgGqhR',
+                        lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.005 // Convert SOL to lamports
+                    })
+                );
+                // Sign transaction
+                const signature = await window.solana.signTransaction(transaction);
+                // Send transaction
+                const result = await connection.sendRawTransaction(signature);
+                console.log('Transaction sent:', result);
+                document.getElementById('status').innerText = 'Transaction sent successfully';
+            } catch (error) {
+                console.error('Failed to send transaction:', error);
+                document.getElementById('status').innerText = 'Failed to send transaction';
+            }
+        }
+
+        // Event listeners
         document.getElementById('connectButton').addEventListener('click', connectWallet);
+        document.getElementById('sendButton').addEventListener('click', sendSOL);
     </script>
 </body>
 </html>
