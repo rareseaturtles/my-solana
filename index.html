@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Solana Wallet Integration</title>
     <!-- Include Solana SDK -->
-    <script src="https://raw.githubusercontent.com/solana-labs/solana/v1.7.0/web3.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/solana/1.7.0/web3.min.js"></script>
     <!-- Add any CSS styles here -->
     <style>
         body {
@@ -60,7 +60,7 @@
                     document.getElementById('disconnectButton').style.display = 'inline-block';
                     document.getElementById('sendButton').style.display = 'inline-block';
                     // Initialize Solana connection
-                    connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
+                    connection = new solanaWeb3.Connection('https://api.mainnet-beta.solana.com');
                 }
             } catch (error) {
                 console.error('Failed to connect to Phantom wallet:', error);
