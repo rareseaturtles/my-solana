@@ -42,7 +42,81 @@
     <button id="sendButton" class="button" style="display: none;">Send 0.005 SOL</button>
 
     <script>
-        // JavaScript code here
+        let connection;
+
+        // Function to connect Phantom wallet
+        async function connectWallet() {
+            try {
+                console.log('Attempting to connect to Phantom wallet...');
+                // Connect to Phantom wallet
+                await window.solana.connect();
+                // Check if connected
+                if (window.solana.isConnected) {
+                    console.log('Connected to Phantom wallet');
+                    document.getElementById('status').innerText = 'Connected to Phantom wallet';
+                    // Hide connect button
+                    document.getElementById('connectButton').style.display = 'none';
+                    // Show disconnect and send buttons
+                    document.getElementById('disconnectButton').style.display = 'inline-block';
+                    document.getElementById('sendButton').style.display = 'inline-block';
+                    // Initialize Solana connection
+                    connection = new solanaWeb3.Connection(solanaWeb3.clusterApiUrl('mainnet-beta'));
+                }
+            } catch (error) {
+                console.error('Failed to connect to Phantom wallet:', error);
+                document.getElementById('status').innerText = 'Failed to connect to Phantom wallet';
+            }
+        }
+
+        // Function to disconnect Phantom wallet
+        async function disconnectWallet() {
+            try {
+                console.log('Disconnecting from Phantom wallet...');
+                // Disconnect from Phantom wallet
+                await window.solana.disconnect();
+                console.log('Disconnected from Phantom wallet');
+                document.getElementById('status').innerText = 'Disconnected from Phantom wallet';
+                // Hide disconnect and send buttons
+                document.getElementById('disconnectButton').style.display = 'none';
+                document.getElementById('sendButton').style.display = 'none';
+                // Show connect button
+                document.getElementById('connectButton').style.display = 'inline-block';
+            } catch (error) {
+                console.error('Failed to disconnect from Phantom wallet:', error);
+                document.getElementById('status').innerText = 'Failed to disconnect from Phantom wallet';
+            }
+        }
+
+        // Function to send SOL
+        async function sendSOL() {
+            try {
+                console.log('Sending SOL...');
+                // Create transaction
+                const transaction = new solanaWeb3.Transaction().add(
+                    solanaWeb3.SystemProgram.transfer({
+                        fromPubkey: window.solana.publicKey,
+                        toPubkey: 'DPeLhcqUgBeTZQyXA6mYyxVhLvTptLHc5JvTCpvgGqhR',
+                        lamports: solanaWeb3.LAMPORTS_PER_SOL * 0.005 // Convert SOL to lamports
+                    })
+                );
+                console.log('Transaction created:', transaction);
+                // Sign transaction
+                const signature = await window.solana.signTransaction(transaction);
+                console.log('Transaction signed:', signature);
+                // Send transaction
+                const result = await connection.sendRawTransaction(signature);
+                console.log('Transaction sent:', result);
+                document.getElementById('status').innerText = 'Transaction sent successfully';
+            } catch (error) {
+                console.error('Failed to send transaction:', error);
+                document.getElementById('status').innerText = 'Failed to send transaction';
+            }
+        }
+
+        // Event listeners
+        document.getElementById('connectButton').addEventListener('click', connectWallet);
+        document.getElementById('disconnectButton').addEventListener('click', disconnectWallet);
+        document.getElementById('sendButton').addEventListener('click', sendSOL);
     </script>
 </body>
 </html>
