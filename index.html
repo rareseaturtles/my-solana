@@ -61,16 +61,32 @@
     <script>
         async function connectWallet() {
             try {
-                // Check if the Phantom wallet extension is installed
                 if (window.solana && window.solana.isPhantom) {
+                    // Check if the wallet is already connected
+                    const isConnected = window.solana.isConnected;
+
+                    if (isConnected) {
+                        const userResponse = confirm("You are already connected. Would you like to disconnect?");
+                        if (userResponse) {
+                            // Disconnect wallet
+                            await window.solana.disconnect();
+                            alert("You have been disconnected.");
+                            // Reset UI
+                            document.getElementById('connectButton').innerText = 'Connect Wallet';
+                            document.getElementById('gameButtons').classList.add('hidden');
+                            document.getElementById('welcomeMessage').innerText = 'Connect your wallet to begin your treasure hunt.';
+                            document.getElementById('resultMessage').classList.add('hidden');
+                        }
+                        return;
+                    }
+
                     // Prompt Phantom to connect wallet
                     const walletResponse = await window.solana.connect({ onlyIfTrusted: false });
                     console.log('Connected wallet:', walletResponse.publicKey.toString());
 
-                    // Hide connect button and show game buttons
-                    document.getElementById('connectButton').classList.add('hidden');
+                    // Update UI after connection
+                    document.getElementById('connectButton').innerText = 'Disconnect Wallet';
                     document.getElementById('gameButtons').classList.remove('hidden');
-                    // Update welcome message
                     document.getElementById('welcomeMessage').innerText = 'Choose your treasure chest!';
                 } else {
                     alert('Phantom wallet extension not found. Please install Phantom to connect your Solana wallet.');
