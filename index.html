@@ -3,132 +3,107 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Turtle Treasure</title>
+    <title>Indy Home Improvements</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            text-align: center;
             margin: 0;
             padding: 0;
-            background-color: #f0f8ff; /* Light blue background */
+            background-color: #f8f9fa; /* Light gray background */
+            color: #333; /* Dark gray text */
         }
-        h1 {
+        header {
+            background-color: #2c3e50; /* Dark blue background */
+            color: #ffffff; /* White text */
+            padding: 20px 0;
+            text-align: center;
+        }
+        header h1 {
             font-size: 48px;
-            margin-top: 20px;
-            color: #2d5a80; /* Dark blue text */
+            margin: 0;
             font-family: 'Trebuchet MS', sans-serif;
         }
-        .button {
-            padding: 10px 20px;
+        header p {
+            font-size: 20px;
+            margin: 10px 0 0 0;
+            color: #f39c12; /* Golden accent color */
+        }
+        .logo-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .logo {
+            width: 100px;
+            height: 100px;
+        }
+        .content {
+            text-align: center;
+            padding: 50px 20px;
+        }
+        .content h2 {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        .content p {
             font-size: 18px;
-            cursor: pointer;
-            margin: 10px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            transition: background-color 0.3s;
+            margin-bottom: 40px;
+            line-height: 1.6;
         }
-        .button:hover {
-            background-color: #0056b3;
-        }
-        #resultMessage {
+        .contact {
             font-size: 24px;
-            margin-top: 20px;
-            color: #4caf50; /* Green for result text */
             font-weight: bold;
+            color: #2c3e50; /* Dark blue text */
         }
-        .hidden {
-            display: none;
+        footer {
+            background-color: #2c3e50; /* Dark blue background */
+            color: #ffffff; /* White text */
+            padding: 10px 0;
+            text-align: center;
+        }
+        footer p {
+            margin: 0;
+            font-size: 14px;
         }
     </style>
 </head>
 <body>
-    <h1>Turtle Treasure</h1>
-    <p id="welcomeMessage">Connect your wallet to begin your treasure hunt.</p>
 
-    <button id="connectButton" class="button" onclick="connectWallet()">Connect Wallet</button>
+    <!-- Header Section -->
+    <header>
+        <div class="logo-container">
+            <!-- SVG Logo -->
+            <svg class="logo" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+                <!-- House base -->
+                <rect x="20" y="40" width="60" height="40" fill="#f39c12" stroke="#ffffff" stroke-width="2" />
+                <!-- Roof -->
+                <polygon points="20,40 50,10 80,40" fill="#ffffff" stroke="#f39c12" stroke-width="2" />
+                <!-- Door -->
+                <rect x="45" y="55" width="10" height="25" fill="#2c3e50" />
+                <!-- Windows -->
+                <rect x="30" y="50" width="10" height="10" fill="#2c3e50" />
+                <rect x="60" y="50" width="10" height="10" fill="#2c3e50" />
+            </svg>
+        </div>
+        <h1>Indy Home Improvements</h1>
+        <p>Your Trusted Construction Experts</p>
+    </header>
 
-    <div id="gameButtons" class="hidden">
-        <button class="button" id="button1" onclick="playGame('button1')">1</button>
-        <button class="button" id="button2" onclick="playGame('button2')">2</button>
+    <!-- Main Content Section -->
+    <div class="content">
+        <h2>Welcome to Indy Home Improvements</h2>
+        <p>
+            We specialize in high-quality construction and remodeling services for your home and business.
+            With years of experience and a commitment to excellence, we bring your vision to life.
+        </p>
+        <p class="contact">Call us today: (765) 366-3344</p>
     </div>
 
-    <p id="resultMessage" class="hidden"></p>
+    <!-- Footer Section -->
+    <footer>
+        <p>&copy; 2024 Indy Home Improvements. All rights reserved.</p>
+    </footer>
 
-    <!-- Add Solana Web3.js library -->
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js"></script>
-    <script>
-        let connectedWallet = null;
-
-        async function connectWallet() {
-            try {
-                // Ensure Phantom wallet is available
-                if (!window.solana || !window.solana.isPhantom) {
-                    alert('Phantom wallet not detected. Please install it from https://phantom.app/');
-                    return;
-                }
-
-                // Request connection
-                const response = await window.solana.connect({ onlyIfTrusted: false });
-                connectedWallet = response.publicKey.toString();
-                console.log('Wallet connected:', connectedWallet);
-
-                // Update UI
-                document.getElementById('connectButton').innerText = 'Disconnect Wallet';
-                document.getElementById('connectButton').onclick = disconnectWallet;
-                document.getElementById('gameButtons').classList.remove('hidden');
-                document.getElementById('welcomeMessage').innerText = `Wallet Connected: ${connectedWallet}`;
-            } catch (error) {
-                console.error('Error connecting wallet:', error);
-                alert('Failed to connect to the wallet. Please try again.');
-            }
-        }
-
-        function disconnectWallet() {
-            try {
-                // Disconnect wallet
-                window.solana.disconnect();
-                alert('Wallet disconnected successfully.');
-                connectedWallet = null;
-
-                // Reset UI
-                document.getElementById('connectButton').innerText = 'Connect Wallet';
-                document.getElementById('connectButton').onclick = connectWallet;
-                document.getElementById('gameButtons').classList.add('hidden');
-                document.getElementById('resultMessage').classList.add('hidden');
-                document.getElementById('welcomeMessage').innerText = 'Connect your wallet to begin your treasure hunt.';
-            } catch (error) {
-                console.error('Error disconnecting wallet:', error);
-            }
-        }
-
-        function playGame(buttonId) {
-            if (!connectedWallet) {
-                alert('Please connect your wallet first.');
-                return;
-            }
-
-            // Retrieve the last play timestamp for this wallet
-            const lastPlayTimestamp = localStorage.getItem(`lastPlay_${connectedWallet}`);
-            const currentTime = Date.now();
-            const oneHour = 60 * 60 * 1000;
-
-            if (lastPlayTimestamp && currentTime - parseInt(lastPlayTimestamp) < oneHour) {
-                const timeLeft = Math.ceil((oneHour - (currentTime - lastPlayTimestamp)) / 60000);
-                alert(`You can only play once per hour. Please try again in ${timeLeft} minutes.`);
-                return;
-            }
-
-            // Save the current time as the last play timestamp
-            localStorage.setItem(`lastPlay_${connectedWallet}`, currentTime.toString());
-
-            // Randomly determine the outcome
-            const resultMessage = document.getElementById('resultMessage');
-            const outcome = Math.random() < 0.5 ? 'Winner' : 'Loser';
-            resultMessage.innerText = `You selected ${buttonId} and are a ${outcome}!`;
-            resultMessage.classList.remove('hidden');
-        }
-    </script>
 </body>
 </html>
