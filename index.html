@@ -50,8 +50,8 @@
     <button id="connectButton" class="button" onclick="connectWallet()">Connect Wallet</button>
 
     <div id="gameButtons" class="hidden">
-        <button class="button" onclick="playGame()">1</button>
-        <button class="button" onclick="playGame()">2</button>
+        <button class="button" id="button1" onclick="playGame('button1')">1</button>
+        <button class="button" id="button2" onclick="playGame('button2')">2</button>
     </div>
 
     <p id="resultMessage" class="hidden"></p>
@@ -59,33 +59,38 @@
     <!-- Add Solana Web3.js library -->
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js"></script>
     <script>
+        let connectedWallet = null;
+
         async function connectWallet() {
             try {
-                // Check if Phantom wallet is installed
-                if (window.solana && window.solana.isPhantom) {
-                    // Prompt user to connect wallet
-                    await window.solana.connect();
-                    const publicKey = window.solana.publicKey.toString();
-                    console.log('Connected wallet:', publicKey);
-
-                    // Update UI after connection
-                    document.getElementById('connectButton').innerText = 'Disconnect Wallet';
-                    document.getElementById('connectButton').onclick = disconnectWallet;
-                    document.getElementById('gameButtons').classList.remove('hidden');
-                    document.getElementById('welcomeMessage').innerText = 'Wallet Connected! Choose your treasure chest.';
-                } else {
-                    alert('Phantom wallet extension not found. Please install Phantom to connect your Solana wallet.');
+                // Ensure Phantom wallet is available
+                if (!window.solana || !window.solana.isPhantom) {
+                    alert('Phantom wallet not detected. Please install it from https://phantom.app/');
+                    return;
                 }
+
+                // Request connection
+                const response = await window.solana.connect({ onlyIfTrusted: false });
+                connectedWallet = response.publicKey.toString();
+                console.log('Wallet connected:', connectedWallet);
+
+                // Update UI
+                document.getElementById('connectButton').innerText = 'Disconnect Wallet';
+                document.getElementById('connectButton').onclick = disconnectWallet;
+                document.getElementById('gameButtons').classList.remove('hidden');
+                document.getElementById('welcomeMessage').innerText = `Wallet Connected: ${connectedWallet}`;
             } catch (error) {
                 console.error('Error connecting wallet:', error);
-                alert('An error occurred while connecting your Solana wallet. Please try again.');
+                alert('Failed to connect to the wallet. Please try again.');
             }
         }
 
         function disconnectWallet() {
             try {
+                // Disconnect wallet
                 window.solana.disconnect();
                 alert('Wallet disconnected successfully.');
+                connectedWallet = null;
 
                 // Reset UI
                 document.getElementById('connectButton').innerText = 'Connect Wallet';
@@ -98,10 +103,30 @@
             }
         }
 
-        function playGame() {
+        function playGame(buttonId) {
+            if (!connectedWallet) {
+                alert('Please connect your wallet first.');
+                return;
+            }
+
+            // Retrieve the last play timestamp for this wallet
+            const lastPlayTimestamp = localStorage.getItem(`lastPlay_${connectedWallet}`);
+            const currentTime = Date.now();
+            const oneHour = 60 * 60 * 1000;
+
+            if (lastPlayTimestamp && currentTime - parseInt(lastPlayTimestamp) < oneHour) {
+                const timeLeft = Math.ceil((oneHour - (currentTime - lastPlayTimestamp)) / 60000);
+                alert(`You can only play once per hour. Please try again in ${timeLeft} minutes.`);
+                return;
+            }
+
+            // Save the current time as the last play timestamp
+            localStorage.setItem(`lastPlay_${connectedWallet}`, currentTime.toString());
+
+            // Randomly determine the outcome
             const resultMessage = document.getElementById('resultMessage');
-            const outcome = Math.random() < 0.5 ? 'Winner' : 'Loser'; // Random outcome
-            resultMessage.innerText = `You are a ${outcome}!`;
+            const outcome = Math.random() < 0.5 ? 'Winner' : 'Loser';
+            resultMessage.innerText = `You selected ${buttonId} and are a ${outcome}!`;
             resultMessage.classList.remove('hidden');
         }
     </script>
