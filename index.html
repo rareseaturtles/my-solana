@@ -57,14 +57,16 @@
     <p id="resultMessage" class="hidden"></p>
 
     <!-- Add Phantom wallet extension -->
-    <script src="https://solana.com/phoenix/wallet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js"></script>
     <script>
         async function connectWallet() {
             try {
                 // Check if the Phantom wallet extension is installed
                 if (window.solana && window.solana.isPhantom) {
                     // Prompt Phantom to connect wallet
-                    await window.solana.connect();
+                    const walletResponse = await window.solana.connect({ onlyIfTrusted: false });
+                    console.log('Connected wallet:', walletResponse.publicKey.toString());
+
                     // Hide connect button and show game buttons
                     document.getElementById('connectButton').classList.add('hidden');
                     document.getElementById('gameButtons').classList.remove('hidden');
