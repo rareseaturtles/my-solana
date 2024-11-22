@@ -6,7 +6,7 @@
     <title>Turtle Treasure</title>
     <style>
         body {
-            font-family: 'Arial', sans-serif;
+            font-family: Arial, sans-serif;
             text-align: center;
             margin: 0;
             padding: 0;
@@ -23,14 +23,14 @@
             font-size: 18px;
             cursor: pointer;
             margin: 10px;
-            background-color: #007bff; /* Blue button color */
-            color: #fff; /* White button text color */
+            background-color: #007bff;
+            color: white;
             border: none;
             border-radius: 5px;
             transition: background-color 0.3s;
         }
         .button:hover {
-            background-color: #0056b3; /* Darker blue on hover */
+            background-color: #0056b3;
         }
         #resultMessage {
             font-size: 24px;
@@ -56,38 +56,23 @@
 
     <p id="resultMessage" class="hidden"></p>
 
-    <!-- Add Phantom wallet extension -->
+    <!-- Add Solana Web3.js library -->
     <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js"></script>
     <script>
         async function connectWallet() {
             try {
+                // Check if Phantom wallet is installed
                 if (window.solana && window.solana.isPhantom) {
-                    // Check if the wallet is already connected
-                    const isConnected = window.solana.isConnected;
-
-                    if (isConnected) {
-                        const userResponse = confirm("You are already connected. Would you like to disconnect?");
-                        if (userResponse) {
-                            // Disconnect wallet
-                            await window.solana.disconnect();
-                            alert("You have been disconnected.");
-                            // Reset UI
-                            document.getElementById('connectButton').innerText = 'Connect Wallet';
-                            document.getElementById('gameButtons').classList.add('hidden');
-                            document.getElementById('welcomeMessage').innerText = 'Connect your wallet to begin your treasure hunt.';
-                            document.getElementById('resultMessage').classList.add('hidden');
-                        }
-                        return;
-                    }
-
-                    // Prompt Phantom to connect wallet
-                    const walletResponse = await window.solana.connect({ onlyIfTrusted: false });
-                    console.log('Connected wallet:', walletResponse.publicKey.toString());
+                    // Prompt user to connect wallet
+                    await window.solana.connect();
+                    const publicKey = window.solana.publicKey.toString();
+                    console.log('Connected wallet:', publicKey);
 
                     // Update UI after connection
                     document.getElementById('connectButton').innerText = 'Disconnect Wallet';
+                    document.getElementById('connectButton').onclick = disconnectWallet;
                     document.getElementById('gameButtons').classList.remove('hidden');
-                    document.getElementById('welcomeMessage').innerText = 'Choose your treasure chest!';
+                    document.getElementById('welcomeMessage').innerText = 'Wallet Connected! Choose your treasure chest.';
                 } else {
                     alert('Phantom wallet extension not found. Please install Phantom to connect your Solana wallet.');
                 }
@@ -97,9 +82,25 @@
             }
         }
 
+        function disconnectWallet() {
+            try {
+                window.solana.disconnect();
+                alert('Wallet disconnected successfully.');
+
+                // Reset UI
+                document.getElementById('connectButton').innerText = 'Connect Wallet';
+                document.getElementById('connectButton').onclick = connectWallet;
+                document.getElementById('gameButtons').classList.add('hidden');
+                document.getElementById('resultMessage').classList.add('hidden');
+                document.getElementById('welcomeMessage').innerText = 'Connect your wallet to begin your treasure hunt.';
+            } catch (error) {
+                console.error('Error disconnecting wallet:', error);
+            }
+        }
+
         function playGame() {
             const resultMessage = document.getElementById('resultMessage');
-            const outcome = Math.random() < 0.5 ? 'Winner' : 'Loser'; // 50% chance for either
+            const outcome = Math.random() < 0.5 ? 'Winner' : 'Loser'; // Random outcome
             resultMessage.innerText = `You are a ${outcome}!`;
             resultMessage.classList.remove('hidden');
         }
