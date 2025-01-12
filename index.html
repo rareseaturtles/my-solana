@@ -3,37 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Indy Home Improvements - Expert construction and remodeling services. Call us today at (765) 366-3344.">
+    <meta name="description" content="Indy Home Improvements - Expert construction and remodeling services.">
     <meta name="keywords" content="Home Improvements, Construction, Remodeling, Indy">
     <title>Indy Home Improvements</title>
     <style>
-        /* Global styles */
+        /* General styles */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #f4f4f4; /* Light background for contrast */
-            color: #333; /* Neutral text color */
+            background-color: #e9f1f8; /* Light blue background inspired by the logo */
+            color: #2c3e50; /* Deep blue text */
         }
 
         /* Header styles */
         header {
-            background-color: #2c3e50; /* Dark blue from the logo */
-            color: #ffffff; /* White text for contrast */
+            background-color: #2c3e50; /* Deep blue from the logo */
+            color: #ffffff;
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header img {
+            max-width: 150px; /* Adjust logo size */
+            margin-bottom: 10px;
+        }
+
+        header h1 {
+            font-size: 32px;
+            margin: 0;
+        }
+
+        /* Main content */
+        main {
             padding: 20px;
             text-align: center;
         }
 
-        header h1 {
-            font-size: 36px;
-            margin: 0;
+        main p {
+            font-size: 18px;
+            margin: 10px 0;
         }
 
-        /* Call-to-action button */
+        /* Button styles */
         .cta-button {
             background-color: #f39c12; /* Orange from the logo */
             color: white;
-            padding: 10px 20px;
+            padding: 12px 25px;
             border: none;
             border-radius: 5px;
             font-size: 18px;
@@ -49,8 +68,8 @@
 
         /* Footer styles */
         footer {
-            background-color: #2c3e50; /* Dark blue */
-            color: #ffffff; /* White text */
+            background-color: #2c3e50; /* Deep blue from the logo */
+            color: #ffffff;
             text-align: center;
             padding: 10px 0;
         }
@@ -61,21 +80,27 @@
                 font-size: 28px;
             }
 
+            main p {
+                font-size: 16px;
+            }
+
             .cta-button {
                 font-size: 16px;
-                padding: 8px 16px;
+                padding: 10px 20px;
             }
         }
     </style>
 </head>
 <body>
     <header>
+        <img src="https://i.ibb.co/NZ7Kgp8/Screenshot-20250111-230007-Facebook.jpg" alt="Indy Home Improvements Logo">
         <h1>Welcome to Indy Home Improvements</h1>
     </header>
-    <main style="padding: 20px; text-align: center;">
+    <main>
         <p>With years of experience and a commitment to excellence, we bring your vision to life.</p>
         <p>Call or Text us today: <strong>(765) 366-3344</strong></p>
-        <a href="contact.html" class="cta-button">Get a Quote</a>
+        <!-- Button triggers SMS app -->
+        <a href="sms:+17653663344" class="cta-button">Contact Us</a>
     </main>
     <footer>
         <p>&copy; 2025 Indy Home Improvements. All Rights Reserved.</p>
