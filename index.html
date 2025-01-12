@@ -18,23 +18,19 @@
 
         /* Header styles */
         header {
-            background-image: url('https://i.ibb.co/NZ7Kgp8/Screenshot-20250111-230007-Facebook.jpg'); /* Logo as banner */
-            background-size: cover;
-            background-position: center;
-            height: 250px; /* Adjust for a full banner */
+            background-color: #2c3e50; /* Deep blue background */
+            height: 200px; /* Adjust for the logo size */
             display: flex;
             justify-content: center;
             align-items: center;
             text-align: center;
-            color: white;
             position: relative;
         }
 
-        header h1 {
-            background-color: rgba(0, 0, 0, 0.6); /* Add transparency to highlight text */
-            padding: 10px 20px;
-            border-radius: 5px;
-            font-size: 36px;
+        header img {
+            max-height: 150px; /* Resized logo to fit better */
+            height: auto;
+            width: auto;
         }
 
         /* Main content */
@@ -76,10 +72,6 @@
 
         /* Responsive styles */
         @media (max-width: 768px) {
-            header h1 {
-                font-size: 28px;
-            }
-
             main p {
                 font-size: 16px;
             }
@@ -93,7 +85,7 @@
 </head>
 <body>
     <header>
-        <h1>Welcome to Indy Home Improvements</h1>
+        <img src="https://i.ibb.co/NZ7Kgp8/Screenshot-20250111-230007-Facebook.jpg" alt="Indy Home Improvements Logo">
     </header>
     <main>
         <p>With years of experience and a commitment to excellence, we bring your vision to life.</p>
