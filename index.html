@@ -12,25 +12,28 @@
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background-color: #e9f1f8; /* Light blue background */
-            color: #2c3e50; /* Deep blue text */
+            background: linear-gradient(to bottom, rgba(255, 255, 255, 0.9), rgba(233, 241, 248, 0.9)),
+                        url('https://i.ibb.co/2kxV9wZ/cleaning-background.jpg') center/cover no-repeat;
+            color: #2c3e50;
+            overflow-x: hidden;
         }
 
         /* Header styles */
         header {
-            background-color: #2c3e50; /* Deep blue background */
-            height: 200px; /* Adjust for the logo size */
+            background-color: rgba(44, 62, 80, 0.8); /* Slight transparency */
+            height: 200px;
             display: flex;
             justify-content: center;
             align-items: center;
             text-align: center;
-            position: relative;
         }
 
         header img {
-            max-height: 150px; /* Resized logo to fit better */
+            max-height: 150px;
             height: auto;
             width: auto;
+            border-radius: 15px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
         }
 
         /* Main content */
@@ -52,12 +55,12 @@
         .image-container img {
             max-width: 90%;
             height: auto;
-            border-radius: 5px; /* Optional: Add rounded corners */
+            border-radius: 5px;
         }
 
         /* Button styles */
         .cta-button {
-            background-color: #f39c12; /* Orange */
+            background-color: #f39c12;
             color: white;
             padding: 12px 25px;
             border: none;
@@ -67,15 +70,16 @@
             text-decoration: none;
             display: inline-block;
             margin-top: 20px;
+            transition: background-color 0.3s ease;
         }
 
         .cta-button:hover {
-            background-color: #d35400; /* Darker orange */
+            background-color: #d35400;
         }
 
         /* Footer styles */
         footer {
-            background-color: #2c3e50; /* Deep blue */
+            background-color: rgba(44, 62, 80, 0.9);
             color: #ffffff;
             text-align: center;
             padding: 10px 0;
@@ -90,6 +94,14 @@
             .cta-button {
                 font-size: 16px;
                 padding: 10px 20px;
+            }
+
+            header {
+                height: 150px;
+            }
+
+            header img {
+                max-height: 100px;
             }
         }
     </style>
