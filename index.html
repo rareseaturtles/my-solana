@@ -6,6 +6,26 @@
     <meta name="description" content="Indy Home Improvements - Expert construction and remodeling services.">
     <meta name="keywords" content="Home Improvements, Construction, Remodeling, Indy">
     <title>Indy Home Improvements</title>
+
+    <!-- Favicon -->
+    <link rel="icon" href="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png" type="image/x-icon">
+
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Indy Home Improvements">
+    <meta property="og:description" content="Expert construction and remodeling services. Call or text us today!">
+    <meta property="og:image" content="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png">
+    <meta property="og:url" content="https://www.yoursite.com">
+    <meta property="og:type" content="website">
+
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:title" content="Indy Home Improvements">
+    <meta name="twitter:description" content="Expert construction and remodeling services. Call or text us today!">
+    <meta name="twitter:image" content="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- Swiper.js Styles -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper/swiper-bundle.min.css">
+
     <style>
         /* General styles */
         body {
@@ -25,13 +45,13 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.4); /* Semi-transparent black */
+            background: rgba(0, 0, 0, 0.4);
             z-index: -1;
         }
 
         /* Header styles */
         header {
-            background: rgba(44, 62, 80, 0.8); /* Translucent deep blue */
+            background: rgba(44, 62, 80, 0.8);
             height: 300px;
             display: flex;
             align-items: center;
@@ -104,6 +124,25 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
         }
 
+        /* Swiper container styles */
+        .swiper {
+            width: 90%;
+            margin: 20px auto;
+        }
+
+        .swiper-slide {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .swiper-slide img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
         /* Footer styles */
         footer {
             background-color: #2c3e50;
@@ -122,48 +161,18 @@
             text-decoration: underline;
         }
 
-        /* Google Form Styles */
-        .form-container {
-            margin-top: 40px;
-            padding: 20px;
-            background-color: rgba(44, 62, 80, 0.9);
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7);
-        }
-
-        .form-container h2 {
-            font-size: 28px;
-            margin-bottom: 20px;
-            color: #f39c12;
-        }
-
         /* Responsive styles */
         @media (max-width: 768px) {
             .services {
                 font-size: 16px;
-                width: 100%; /* Full width for each section */
-                text-align: center; /* Center the text on small screens */
             }
 
             .header-content {
                 flex-direction: column;
-                width: 100%;
-                text-align: center;
             }
 
-            .header-logo {
-                max-width: 80%;
-                margin-bottom: 20px;
-            }
-
-            .cta-button {
-                font-size: 16px;
-                padding: 12px 25px;
-            }
-
-            .form-container iframe {
-                width: 100%;
-                height: 600px;
+            header {
+                flex-wrap: wrap;
             }
         }
     </style>
@@ -191,22 +200,54 @@
         <p>With years of experience and a commitment to excellence, we bring your vision to life.</p>
         <p>Call or Text us today: <strong>(765) 366-3344</strong></p>
         <button class="cta-button" onclick="window.location.href='sms:+17653663344'">Contact Us</button>
-        <div class="image-container">
-            <a href="https://ibb.co/QQP07Y2">
-                <img src="https://i.ibb.co/LRxKD9L/Screenshot-20250111-234720-Facebook.jpg" alt="Construction Image">
-            </a>
+
+        <h2>Most Recent Projects</h2>
+        <div class="swiper">
+            <div class="swiper-wrapper">
+                <div class="swiper-slide">
+                    <img src="https://i.ibb.co/YpCBHQt/20250116-113518.jpg" alt="Main Project Image">
+                </div>
+                <div class="swiper-slide">
+                    <img src="https://i.ibb.co/zHVxZKV/20241218-101306.jpg" alt="Recent Project 1">
+                </div>
+                <div class="swiper-slide">
+                    <img src="https://i.ibb.co/rvsq3gT/20241203-161640.jpg" alt="Recent Project 2">
+                </div>
+                <div class="swiper-slide">
+                    <img src="https://i.ibb.co/CV8pBKk/20250116-182710.jpg" alt="Recent Project 3">
+                </div>
+                <div class="swiper-slide">
+                    <img src="https://i.ibb.co/LRxKD9L/Screenshot-20250111-234720-Facebook.jpg" alt="Original Image">
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div class="swiper-pagination"></div>
+
+            <!-- Navigation buttons -->
+            <div class="swiper-button-next"></div>
+            <div class="swiper-button-prev"></div>
         </div>
     </main>
-
-    <!-- Google Form Embed -->
-    <div class="form-container">
-        <h2>Fill out the form below to contact us:</h2>
-        <iframe src="https://docs.google.com/forms/d/e/1FAIpQLSejyHFs_yxwJmm05JQO8-Z10lNAnai7NGECO-m03v7OfOflXA/viewform?usp=header" width="640" height="800" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>
-    </div>
-
     <footer>
         <p>&copy; 2025 Indy Home Improvements. All Rights Reserved.</p>
         <a href="https://www.facebook.com/improvingIndiana/" target="_blank">Visit us on Facebook</a>
     </footer>
+
+    <!-- Swiper.js Script -->
+    <script src="https://cdn.jsdelivr.net/npm/swiper/swiper-bundle.min.js"></script>
+    <script>
+        const swiper = new Swiper('.swiper', {
+            loop: true,
+            pagination: {
+                el: '.swiper-pagination',
+                clickable: true,
+            },
+            navigation: {
+                nextEl: '.swiper-button-next',
+                prevEl: '.swiper-button-prev',
+            },
+        });
+    </script>
 </body>
 </html>
