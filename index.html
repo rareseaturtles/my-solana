@@ -14,7 +14,8 @@
             padding: 0;
             background: url('https://i.ibb.co/DtTwthM/construction-background.jpg') no-repeat center center fixed;
             background-size: cover; /* Cover the entire screen */
-            color: #2c3e50; /* Deep blue text */
+            color: #ffffff; /* White text for better visibility */
+            font-weight: bold; /* Make text bold */
         }
 
         /* Overlay for better text readability */
@@ -40,10 +41,31 @@
             border-bottom: 5px solid #f39c12; /* Matching orange border */
         }
 
-        header img {
+        .header-text {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: absolute;
+            left: 20px; /* To position "Ying" on the left */
+            font-size: 2rem;
+            color: white;
+        }
+
+        .header-text span {
+            margin-right: 10px;
+        }
+
+        .header-logo {
             max-height: 180px; /* Adjusted logo size for better balance */
             width: auto;
             border-radius: 10px; /* Optional: Slight rounding for logo corners */
+        }
+
+        .header-text-right {
+            position: absolute;
+            right: 20px; /* To position "Construction" on the right */
+            font-size: 2rem;
+            color: white;
         }
 
         /* Main content */
@@ -55,9 +77,11 @@
         }
 
         main p {
-            font-size: 20px;
+            font-size: 24px; /* Increased font size */
             margin: 10px 0;
             line-height: 1.6;
+            font-weight: bold; /* Make text bold */
+            color: white; /* White text for better visibility */
         }
 
         .image-container {
@@ -103,7 +127,7 @@
         /* Responsive styles */
         @media (max-width: 768px) {
             main p {
-                font-size: 16px;
+                font-size: 18px; /* Adjust font size on smaller screens */
             }
 
             .cta-button {
@@ -118,13 +142,27 @@
             header img {
                 max-height: 120px; /* Smaller logo for mobile */
             }
+
+            .header-text {
+                font-size: 1.5rem; /* Adjust text size for mobile */
+            }
+
+            .header-text-right {
+                font-size: 1.5rem; /* Adjust text size for mobile */
+            }
         }
     </style>
 </head>
 <body>
     <div class="overlay"></div> <!-- Add overlay to darken background -->
     <header>
-        <img src="https://i.ibb.co/NZ7Kgp8/Screenshot-20250111-230007-Facebook.jpg" alt="Indy Home Improvements Logo">
+        <div class="header-text">
+            <span>Ying</span> <!-- "Ying" on the left -->
+        </div>
+        <img class="header-logo" src="https://i.ibb.co/NZ7Kgp8/Screenshot-20250111-230007-Facebook.jpg" alt="Indy Home Improvements Logo">
+        <div class="header-text-right">
+            <span>Construction</span> <!-- "Construction" on the right -->
+        </div>
     </header>
     <main>
         <p>With years of experience and a commitment to excellence, we bring your vision to life.</p>
