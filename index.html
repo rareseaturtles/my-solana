@@ -43,27 +43,22 @@
 
         .header-content {
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
             position: relative;
         }
 
-        .header-text {
-            font-size: 2rem;
-            color: white;
-            margin-right: 10px; /* Space between Ying and logo */
-        }
-
         .header-logo {
-            max-height: 180px; /* Adjusted logo size for better balance */
+            max-height: 200px; /* Increased logo size */
             width: auto;
             border-radius: 10px; /* Optional: Slight rounding for logo corners */
         }
 
-        .header-text-right {
-            font-size: 2rem;
+        .header-subtitle {
+            font-size: 1.5rem; /* Smaller subtitle */
             color: white;
-            margin-left: 10px; /* Space between Construction and logo */
+            margin-top: 10px;
         }
 
         /* Main content */
@@ -141,12 +136,8 @@
                 max-height: 120px; /* Smaller logo for mobile */
             }
 
-            .header-text {
-                font-size: 1.5rem; /* Adjust text size for mobile */
-            }
-
-            .header-text-right {
-                font-size: 1.5rem; /* Adjust text size for mobile */
+            .header-subtitle {
+                font-size: 1.2rem; /* Adjust subtitle size for mobile */
             }
         }
     </style>
@@ -155,9 +146,8 @@
     <div class="overlay"></div> <!-- Add overlay to darken background -->
     <header>
         <div class="header-content">
-            <div class="header-text">Ying</div> <!-- "Ying" text aligned to the left -->
             <img class="header-logo" src="https://i.ibb.co/NZ7Kgp8/Screenshot-20250111-230007-Facebook.jpg" alt="Indy Home Improvements Logo">
-            <div class="header-text-right">Construction</div> <!-- "Construction" text aligned to the right -->
+            <div class="header-subtitle">and Ying Construction</div> <!-- Smaller subtitle text -->
         </div>
     </header>
     <main>
@@ -176,3 +166,4 @@
     </footer>
 </body>
 </html>
+
