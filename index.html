@@ -12,86 +12,71 @@
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 0;
-            background: url('https://i.ibb.co/j6LwhXX/blueprint.webp') no-repeat center center fixed; /* Updated background image */
-            background-size: cover; /* Cover the entire screen */
-            color: #ffffff; /* White text for better visibility */
-            font-weight: bold; /* Make text bold */
+            background: url('https://i.ibb.co/j6LwhXX/blueprint.webp') no-repeat center center fixed;
+            background-size: cover;
+            color: #ffffff;
+            font-weight: bold;
         }
 
-        /* Overlay for better text readability */
+        /* Overlay for text readability */
         .overlay {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.4); /* Semi-transparent black overlay */
-            z-index: -1; /* Push it behind the content */
+            background: rgba(0, 0, 0, 0.4); /* Semi-transparent black */
+            z-index: -1;
         }
 
         /* Header styles */
         header {
-            background-color: #2c3e50; /* Deep blue background */
-            height: 250px; /* Increase height for better logo visibility */
+            background: rgba(44, 62, 80, 0.8); /* Translucent deep blue */
+            height: 300px;
             display: flex;
-            justify-content: center;
             align-items: center;
+            justify-content: space-between;
+            padding: 20px;
             text-align: center;
-            position: relative;
-            border-bottom: 5px solid #f39c12; /* Matching orange border */
+            color: white;
+        }
+
+        .header-logo {
+            height: 180px;
+            width: auto;
+        }
+
+        .services {
+            font-size: 18px;
+            line-height: 1.5;
+            text-align: center;
+        }
+
+        .services.left, .services.right {
+            width: 20%;
         }
 
         .header-content {
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            position: relative;
-        }
-
-        .header-logo {
-            max-height: 200px; /* Increased logo size */
-            width: auto;
-            border-radius: 10px; /* Optional: Slight rounding for logo corners */
-        }
-
-        .header-subtitle {
-            font-size: 1.5rem; /* Smaller subtitle */
-            color: white;
-            margin-top: 10px;
+            gap: 20px;
+            width: 60%;
         }
 
         /* Main content */
         main {
             padding: 20px;
             text-align: center;
-            max-width: 1200px;
-            margin: 0 auto;
         }
 
         main p {
-            font-size: 24px; /* Increased font size */
-            margin: 10px 0;
+            font-size: 24px;
             line-height: 1.6;
-            font-weight: bold; /* Make text bold */
-            color: white; /* White text for better visibility */
         }
 
-        .image-container {
-            margin: 20px auto;
-            text-align: center;
-        }
-
-        .image-container img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 10px; /* Rounded corners for images */
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* Subtle shadow for depth */
-        }
-
-        /* Button styles */
         .cta-button {
-            background-color: #f39c12; /* Orange */
+            background-color: #f39c12;
             color: white;
             padding: 15px 30px;
             border: none;
@@ -99,70 +84,144 @@
             font-size: 18px;
             cursor: pointer;
             text-decoration: none;
-            display: inline-block;
             margin-top: 20px;
-            transition: background-color 0.3s ease;
         }
 
         .cta-button:hover {
-            background-color: #d35400; /* Darker orange */
+            background-color: #d35400;
         }
 
         /* Footer styles */
         footer {
-            background-color: #2c3e50; /* Deep blue */
+            background-color: #2c3e50;
             color: #ffffff;
             text-align: center;
             padding: 20px 10px;
-            border-top: 5px solid #f39c12; /* Orange top border */
+            border-top: 5px solid #f39c12;
+        }
+
+        footer a {
+            color: #f39c12;
+            text-decoration: none;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Contact form pop-up styles */
+        #contact-popup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            text-align: left;
+            color: #2c3e50;
+        }
+
+        #contact-popup input, #contact-popup textarea, #contact-popup button {
+            display: block;
+            width: 100%;
+            margin-bottom: 10px;
+            padding: 10px;
+            font-size: 16px;
+        }
+
+        #contact-popup button {
+            background-color: #f39c12;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+
+        #contact-popup button:hover {
+            background-color: #d35400;
+        }
+
+        #overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 999;
         }
 
         /* Responsive styles */
         @media (max-width: 768px) {
-            main p {
-                font-size: 18px; /* Adjust font size on smaller screens */
+            .services {
+                font-size: 16px;
             }
 
-            .cta-button {
-                font-size: 16px;
-                padding: 12px 25px;
+            .header-content {
+                flex-direction: column;
             }
 
             header {
-                height: 200px;
-            }
-
-            header img {
-                max-height: 120px; /* Smaller logo for mobile */
-            }
-
-            .header-subtitle {
-                font-size: 1.2rem; /* Adjust subtitle size for mobile */
+                flex-wrap: wrap;
             }
         }
     </style>
+    <script>
+        function openContactPopup() {
+            document.getElementById('contact-popup').style.display = 'block';
+            document.getElementById('overlay').style.display = 'block';
+        }
+
+        function closeContactPopup() {
+            document.getElementById('contact-popup').style.display = 'none';
+            document.getElementById('overlay').style.display = 'none';
+        }
+    </script>
 </head>
 <body>
-    <div class="overlay"></div> <!-- Add overlay to darken background -->
+    <div class="overlay"></div>
     <header>
+        <div class="services left">
+            Exterior<br>
+            Bathrooms<br>
+            Additions
+        </div>
         <div class="header-content">
-            <img class="header-logo" src="https://i.ibb.co/NZ7Kgp8/Screenshot-20250111-230007-Facebook.jpg" alt="Indy Home Improvements Logo">
-            <div class="header-subtitle">and Ying Construction</div> <!-- Smaller subtitle text -->
+            <img class="header-logo" src="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png" alt="Indy Home Improvements Logo">
+            <div>and Ying Construction</div>
+        </div>
+        <div class="services right">
+            Interior<br>
+            Kitchens<br>
+            Windows & Doors
         </div>
     </header>
     <main>
         <p>With years of experience and a commitment to excellence, we bring your vision to life.</p>
         <p>Call or Text us today: <strong>(765) 366-3344</strong></p>
-        <!-- Button triggers SMS app -->
-        <a href="sms:+17653663344" class="cta-button">Contact Us</a>
-        <div class="image-container">
-            <a href="https://ibb.co/QQP07Y2">
-                <img src="https://i.ibb.co/LRxKD9L/Screenshot-20250111-234720-Facebook.jpg" alt="Construction Image">
-            </a>
-        </div>
+        <button class="cta-button" onclick="openContactPopup()">Contact Us</button>
     </main>
     <footer>
         <p>&copy; 2025 Indy Home Improvements. All Rights Reserved.</p>
+        <a href="https://www.facebook.com/improvingIndiana/" target="_blank">Visit us on Facebook</a>
     </footer>
+
+    <!-- Contact Form Pop-up -->
+    <div id="overlay" onclick="closeContactPopup()"></div>
+    <div id="contact-popup">
+        <h2>Contact Us</h2>
+        <form action="mailto:indyhomeimprovements.com@gmail.com" method="post" enctype="text/plain">
+            <input type="text" name="name" placeholder="Your Name" required>
+            <input type="email" name="email" placeholder="Your Email" required>
+            <input type="text" name="location" placeholder="Your Location" required>
+            <textarea name="project" placeholder="Describe your project idea" rows="5" required></textarea>
+            <button type="submit">Send</button>
+        </form>
+        <button onclick="closeContactPopup()">Close</button>
+    </div>
 </body>
 </html>
