@@ -41,18 +41,17 @@
             border-bottom: 5px solid #f39c12; /* Matching orange border */
         }
 
-        .header-text {
+        .header-content {
             display: flex;
             align-items: center;
             justify-content: center;
-            position: absolute;
-            left: 20px; /* To position "Ying" on the left */
-            font-size: 2rem;
-            color: white;
+            position: relative;
         }
 
-        .header-text span {
-            margin-right: 10px;
+        .header-text {
+            font-size: 2rem;
+            color: white;
+            margin-right: 10px; /* Space between Ying and logo */
         }
 
         .header-logo {
@@ -62,10 +61,9 @@
         }
 
         .header-text-right {
-            position: absolute;
-            right: 20px; /* To position "Construction" on the right */
             font-size: 2rem;
             color: white;
+            margin-left: 10px; /* Space between Construction and logo */
         }
 
         /* Main content */
@@ -156,12 +154,10 @@
 <body>
     <div class="overlay"></div> <!-- Add overlay to darken background -->
     <header>
-        <div class="header-text">
-            <span>Ying</span> <!-- "Ying" on the left -->
-        </div>
-        <img class="header-logo" src="https://i.ibb.co/NZ7Kgp8/Screenshot-20250111-230007-Facebook.jpg" alt="Indy Home Improvements Logo">
-        <div class="header-text-right">
-            <span>Construction</span> <!-- "Construction" on the right -->
+        <div class="header-content">
+            <div class="header-text">Ying</div> <!-- "Ying" text aligned to the left -->
+            <img class="header-logo" src="https://i.ibb.co/NZ7Kgp8/Screenshot-20250111-230007-Facebook.jpg" alt="Indy Home Improvements Logo">
+            <div class="header-text-right">Construction</div> <!-- "Construction" text aligned to the right -->
         </div>
     </header>
     <main>
