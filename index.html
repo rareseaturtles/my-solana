@@ -73,6 +73,7 @@
         main p {
             font-size: 24px;
             line-height: 1.6;
+            margin-bottom: 20px;
         }
 
         .cta-button {
@@ -89,6 +90,18 @@
 
         .cta-button:hover {
             background-color: #d35400;
+        }
+
+        .image-container {
+            margin: 20px auto;
+            text-align: center;
+        }
+
+        .image-container img {
+            max-width: 90%;
+            height: auto;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
         }
 
         /* Footer styles */
@@ -109,78 +122,51 @@
             text-decoration: underline;
         }
 
-        /* Contact form pop-up styles */
-        #contact-popup {
-            display: none;
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
+        /* Google Form Styles */
+        .form-container {
+            margin-top: 40px;
             padding: 20px;
+            background-color: rgba(44, 62, 80, 0.9);
             border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            text-align: left;
-            color: #2c3e50;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.7);
         }
 
-        #contact-popup input, #contact-popup textarea, #contact-popup button {
-            display: block;
-            width: 100%;
-            margin-bottom: 10px;
-            padding: 10px;
-            font-size: 16px;
-        }
-
-        #contact-popup button {
-            background-color: #f39c12;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-
-        #contact-popup button:hover {
-            background-color: #d35400;
-        }
-
-        #overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 999;
+        .form-container h2 {
+            font-size: 28px;
+            margin-bottom: 20px;
+            color: #f39c12;
         }
 
         /* Responsive styles */
         @media (max-width: 768px) {
             .services {
                 font-size: 16px;
+                width: 100%; /* Full width for each section */
+                text-align: center; /* Center the text on small screens */
             }
 
             .header-content {
                 flex-direction: column;
+                width: 100%;
+                text-align: center;
             }
 
-            header {
-                flex-wrap: wrap;
+            .header-logo {
+                max-width: 80%;
+                margin-bottom: 20px;
+            }
+
+            .cta-button {
+                font-size: 16px;
+                padding: 12px 25px;
+            }
+
+            .form-container iframe {
+                width: 100%;
+                height: 600px;
             }
         }
     </style>
-    <script>
-        function openContactPopup() {
-            document.getElementById('contact-popup').style.display = 'block';
-            document.getElementById('overlay').style.display = 'block';
-        }
-
-        function closeContactPopup() {
-            document.getElementById('contact-popup').style.display = 'none';
-            document.getElementById('overlay').style.display = 'none';
-        }
-    </script>
 </head>
 <body>
     <div class="overlay"></div>
@@ -190,7 +176,6 @@
             Bathrooms<br>
             Kitchens<br>
             Floors
-            
         </div>
         <div class="header-content">
             <img class="header-logo" src="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png" alt="Indy Home Improvements Logo">
@@ -205,24 +190,23 @@
     <main>
         <p>With years of experience and a commitment to excellence, we bring your vision to life.</p>
         <p>Call or Text us today: <strong>(765) 366-3344</strong></p>
-        <button class="cta-button" onclick="openContactPopup()">Contact Us</button>
+        <button class="cta-button" onclick="window.location.href='sms:+17653663344'">Contact Us</button>
+        <div class="image-container">
+            <a href="https://ibb.co/QQP07Y2">
+                <img src="https://i.ibb.co/LRxKD9L/Screenshot-20250111-234720-Facebook.jpg" alt="Construction Image">
+            </a>
+        </div>
     </main>
+
+    <!-- Google Form Embed -->
+    <div class="form-container">
+        <h2>Fill out the form below to contact us:</h2>
+        <iframe src="https://docs.google.com/forms/d/e/1FAIpQLSejyHFs_yxwJmm05JQO8-Z10lNAnai7NGECO-m03v7OfOflXA/viewform?usp=header" width="640" height="800" frameborder="0" marginheight="0" marginwidth="0">Loading…</iframe>
+    </div>
+
     <footer>
         <p>&copy; 2025 Indy Home Improvements. All Rights Reserved.</p>
         <a href="https://www.facebook.com/improvingIndiana/" target="_blank">Visit us on Facebook</a>
     </footer>
-
-    <!-- Contact Form Pop-up -->
-   <iframe
-    src="https://docs.google.com/forms/d/e/1FAIpQLSejyHFs_yxwJmm05JQO8-Z10lNAnai7NGECO-m03v7OfOflXA/viewform?embedded=true"
-    width="100%"
-    height="500"
-    frameborder="0"
-    marginheight="0"
-    marginwidth="0"
-    style="border: none;"
->
-    Loading…
-</iframe>
 </body>
 </html>
