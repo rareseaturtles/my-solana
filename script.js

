@@ -71,51 +71,51 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     // Determine if cost estimate is reliable
     const isCostReliable = isMeasurementsReliable && isWindowDoorCountReliable;
 
-    // Results HTML
+    // Results HTML with updated styling
     let resultsHtml = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-        <h2 style="color: #333; text-align: center;">Remodel Estimate</h2>
-        <h3 style="color: #555;">Project Overview</h3>
-        <p><strong>Address:</strong> ${addressDisplay}</p>
-        <p><strong>Dimensions:</strong> ${measurements.width}ft x ${measurements.length}ft (Area: ${measurements.area} sq ft)</p>
-        <p><strong>Height (Est.):</strong> ${roofInfo.height}ft | <strong>Roof Pitch:</strong> ${roofInfo.pitch}</p>
-        <p><strong>Windows:</strong> ${windowDoorCount.windows} | <strong>Doors:</strong> ${windowDoorCount.doors}</p>
+      <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem;">
+        <h2 style="color: #1a3c34; margin-bottom: 1rem; font-size: 1.8rem; text-align: center;">Remodel Estimate</h2>
+        <h3 style="color: #1a3c34; margin-bottom: 0.5rem; font-size: 1.3rem;">Project Overview</h3>
+        <p style="margin: 0.5rem 0;"><strong>Address:</strong> ${addressDisplay}</p>
+        <p style="margin: 0.5rem 0;"><strong>Dimensions:</strong> ${measurements.width}ft x ${measurements.length}ft (Area: ${measurements.area} sq ft)</p>
+        <p style="margin: 0.5rem 0;"><strong>Height (Est.):</strong> ${roofInfo.height}ft | <strong>Roof Pitch:</strong> ${roofInfo.pitch}</p>
+        <p style="margin: 0.5rem 0;"><strong>Windows:</strong> ${windowDoorCount.windows} | <strong>Doors:</strong> ${windowDoorCount.doors}</p>
     `;
 
     // Material Estimates
     resultsHtml += `
-      <h3 style="color: #555;">Material Breakdown</h3>
-      <ul style="list-style-type: disc; padding-left: 20px;">${materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
+      <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Material Breakdown</h3>
+      <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
     `;
 
     // Cost Estimate (conditional)
     resultsHtml += `
-      <h3 style="color: #555;">Cost Estimate (Approximate)</h3>
+      <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Cost Estimate (Approximate)</h3>
     `;
     if (isCostReliable) {
       resultsHtml += `
-        <p><strong>Total:</strong> $${costEstimates.totalCost}</p>
-        <ul style="list-style-type: disc; padding-left: 20px;">${costEstimates.costBreakdown.map(item => `<li>${item}</li>`).join("")}</ul>
-        <p style="font-style: italic; color: #777; font-size: 0.9em;">Costs are approximate and may vary based on final measurements, material prices, and labor rates.</p>
+        <p style="margin: 0.5rem 0;"><strong>Total:</strong> $${costEstimates.totalCost}</p>
+        <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${costEstimates.costBreakdown.map(item => `<li>${item}</li>`).join("")}</ul>
+        <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Costs are approximate and may vary based on final measurements, material prices, and labor rates.</p>
       `;
     } else {
       resultsHtml += `
-        <p style="color: #ff9800;">Cost estimate unavailable due to insufficient data accuracy. Please provide more details or upload clear photos of the house exterior.</p>
+        <p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable due to insufficient data accuracy. Please provide more details or upload clear photos of the house exterior.</p>
       `;
     }
 
     // Timeline
     resultsHtml += `
-      <h3 style="color: #555;">Estimated Timeline</h3>
-      <p>${timelineEstimate} weeks</p>
-      <p style="font-style: italic; color: #777; font-size: 0.9em;">Timeline depends on project scope, weather, and crew availability.</p>
+      <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Estimated Timeline</h3>
+      <p style="margin: 0.5rem 0;">${timelineEstimate} weeks</p>
+      <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Timeline depends on project scope, weather, and crew availability.</p>
     `;
 
     // Permit Information
     resultsHtml += `
-      <h3 style="color: #555;">Permit Information</h3>
-      <p>Remodeling in Indiana may require permits for structural, electrical, or plumbing work. Contact your local building department.</p>
-      <p><a href="https://www.in.gov/dhs/building-construction/permits/" target="_blank" style="color: #2196F3; text-decoration: none;">Learn More About Indiana Permits</a></p>
+      <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Permit Information</h3>
+      <p style="margin: 0.5rem 0;">Remodeling in Indiana may require permits for structural, electrical, or plumbing work. Contact your local building department.</p>
+      <p style="margin: 0.5rem 0;"><a href="https://www.in.gov/dhs/building-construction/permits/" target="_blank" style="color: #e67e22; text-decoration: none;">Learn More About Indiana Permits</a></p>
     `;
 
     // Uploaded Images by Direction
@@ -123,9 +123,9 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     for (const direction of directions) {
       if (processedImages[direction]) {
         resultsHtml += `
-          <h3 style="color: #555;">${direction.charAt(0).toUpperCase() + direction.slice(1)}-Facing Image</h3>
+          <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">${direction.charAt(0).toUpperCase() + direction.slice(1)}-Facing Image</h3>
           <div style="text-align: center;">
-            <img src="${processedImages[direction]}" alt="${direction} House Image" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+            <img src="${processedImages[direction]}" alt="${direction} House Image" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin: 1rem 0;">
           </div>
         `;
       }
@@ -135,11 +135,11 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     if (totalImages > 0) {
       if (windowDoorCount.windows === 0 && windowDoorCount.doors === 0) {
         resultsHtml += `
-          <p style="color: #ff9800; font-size: 0.9em;">Failed to detect windows or doors in ${totalImages} image(s). Please upload clear photos of the house exterior.</p>
+          <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Failed to detect windows or doors in ${totalImages} image(s). Please upload clear photos of the house exterior.</p>
         `;
       } else {
         resultsHtml += `
-          <p style="font-style: italic; color: #777; font-size: 0.9em;">Processed ${totalImages} image(s) for window and door detection. Up to 2 images per direction are supported.</p>
+          <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Processed ${totalImages} image(s) for window and door detection. Up to 1 image per direction is processed.</p>
         `;
       }
     }
@@ -147,31 +147,31 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     // Satellite Image
     if (satelliteImage) {
       resultsHtml += `
-        <h3 style="color: #555;">Satellite View (Google Maps)</h3>
+        <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Satellite View (Google Maps)</h3>
         <div style="text-align: center;">
-          <img src="${satelliteImage}" alt="Satellite View of House" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+          <img src="${satelliteImage}" alt="Satellite View of House" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin: 1rem 0;">
         </div>
       `;
     } else if (satelliteImageError) {
-      resultsHtml += `<p style="color: #ff9800; text-align: center;">${satelliteImageError}</p>`;
+      resultsHtml += `<p style="color: #d32f2f; text-align: center; margin: 1rem 0;">${satelliteImageError}</p>`;
     }
 
     // Google Maps Embed (Regular Map with Street View Link)
     if (lat && lon) {
       if (googleMapsApiKey) {
         resultsHtml += `
-          <h3 style="color: #555;">Location Map (Google Maps)</h3>
+          <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Location Map (Google Maps)</h3>
           <div style="text-align: center;">
             <iframe
               width="100%"
               height="200"
               frameborder="0"
-              style="border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
+              style="border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin: 1rem 0;"
               src="https://www.google.com/maps/embed/v1/place?key=${googleMapsApiKey}&q=${lat},${lon}&center=${lat},${lon}&zoom=18"
               allowfullscreen>
             </iframe>
-            <p style="font-size: 0.9em; margin-top: 5px;">
-              <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}&heading=210&pitch=10&fov=90" target="_blank" style="color: #2196F3; text-decoration: none;">
+            <p style="font-size: 0.9rem; margin: 0.5rem 0;">
+              <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}&heading=210&pitch=10&fov=90" target="_blank" style="color: #e67e22; text-decoration: none;">
                 Open Street View in New Tab
               </a>
               (may not be available for all locations)
@@ -180,10 +180,10 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
         `;
       } else {
         resultsHtml += `
-          <h3 style="color: #555;">Location Map (Google Maps)</h3>
-          <p style="color: #ff9800; text-align: center;">Location map unavailable: Google Maps API key is missing.</p>
-          <p style="text-align: center;">
-            <a href="https://www.google.com/maps/search/?api=1&query=${lat},${lon}" target="_blank" style="color: #2196F3; text-decoration: none;">
+          <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Location Map (Google Maps)</h3>
+          <p style="color: #d32f2f; text-align: center; margin: 1rem 0;">Location map unavailable: Google Maps API key is missing.</p>
+          <p style="text-align: center; margin: 0.5rem 0;">
+            <a href="https://www.google.com/maps/search/?api=1&query=${lat},${lon}" target="_blank" style="color: #e67e22; text-decoration: none;">
               View on Google Maps
             </a>
           </p>
@@ -194,22 +194,22 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     // Contact Us Button with Detailed Info
     const smsSummary = `Remodel at ${addressDisplay}: ${measurements.area}sqft, ${windowDoorCount.windows} windows, ${windowDoorCount.doors} doors, ~$${costEstimates.totalCost}. Details: https://indyhomeimprovements.com/remodel-details/${remodelId}`;
     resultsHtml += `
-      <h3 style="color: #555;">Next Steps with Indy Home Improvements</h3>
-      <p>Ready to discuss your project? Contact us directly to request more info or a detailed quote.</p>
-      <p style="font-size: 0.9em; color: #777;">By clicking below, you agree to send an SMS to Indy Home Improvements at 765-366-3344. Standard messaging rates may apply. We will not share your phone number. Reply STOP to opt out.</p>
-      <div style="text-align: center; margin-top: 10px;">
-        <a href="sms:7653663344?body=${encodeURIComponent(smsSummary)}" style="display: inline-block; padding: 12px 24px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Contact Us</a>
+      <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Next Steps with Indy Home Improvements</h3>
+      <p style="margin: 0.5rem 0;">Ready to discuss your project? Contact us directly to request more info or a detailed quote.</p>
+      <p style="font-size: 0.9rem; color: #666; margin: 0.5rem 0;">By clicking below, you agree to send an SMS to Indy Home Improvements at 765-366-3344. Standard messaging rates may apply. We will not share your phone number. Reply STOP to opt out.</p>
+      <div style="text-align: center; margin: 1rem 0;">
+        <a href="sms:7653663344?body=${encodeURIComponent(smsSummary)}" style="display: inline-block; padding: 0.75rem 1.5rem; background-color: #e67e22; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; transition: background-color 0.3s;">Contact Us</a>
       </div>
-      </div>
+    </div>
     `;
 
     document.getElementById("results").innerHTML = resultsHtml;
   } catch (error) {
     console.error("Fetch error:", error);
     document.getElementById("results").innerHTML = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; text-align: center;">
-        <p style="color: #f44336;">Error: ${error.message}</p>
-        <p>Please try again or contact Indy Home Improvements at 765-366-3344 for assistance.</p>
+      <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem; text-align: center;">
+        <p style="color: #d32f2f; margin: 0.5rem 0;">Error: ${error.message}</p>
+        <p style="margin: 0.5rem 0;">Please try again or contact Indy Home Improvements at 765-366-3344 for assistance.</p>
       </div>
     `;
   }
@@ -227,6 +227,8 @@ directions.forEach(direction => {
       const img = document.createElement("img");
       img.src = URL.createObjectURL(file);
       img.style.maxWidth = "150px";
+      img.style.borderRadius = "4px";
+      img.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
       img.style.margin = "5px";
       preview.appendChild(img);
     });
