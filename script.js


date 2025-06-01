@@ -115,9 +115,15 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
     // Note About Multiple Images
     if (images.length > 0) {
-      resultsHtml += `
-        <p style="font-style: italic; color: #777; font-size: 0.9em;">Processed ${images.length} image(s) for window and door detection. Up to 5 images are supported.</p>
-      `;
+      if (windowDoorCount.windows === 0 && windowDoorCount.doors === 0 && images.length > 0) {
+        resultsHtml += `
+          <p style="color: #ff9800; font-size: 0.9em;">Failed to detect windows or doors in ${images.length} image(s). Please upload clear photos of the house exterior.</p>
+        `;
+      } else {
+        resultsHtml += `
+          <p style="font-style: italic; color: #777; font-size: 0.9em;">Processed ${images.length} image(s) for window and door detection. Up to 5 images are supported.</p>
+        `;
+      }
     }
 
     // Satellite Image
@@ -143,7 +149,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
               height="200"
               frameborder="0"
               style="border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
-              src="https://www.google.com/maps/embed/v1/place?key=${googleMapsApiKey}&q=${lat},${lon}&center=${lat},${lon}&zoom=18"
+              src="https://www.google.com/maps/embed/v1/place?key=${googleMapsApiKey}&q=${lat},${lon}¢er=${lat},${lon}&zoom=18"
               allowfullscreen>
             </iframe>
             <p style="font-size: 0.9em; margin-top: 5px;">
