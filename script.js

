@@ -51,6 +51,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const satelliteImageError = result.satelliteImageError || null;
     const lat = result.addressData?.lat || 0;
     const lon = result.addressData?.lon || 0;
+    const googleMapsApiKey = result.googleMapsApiKey || "";
 
     // Determine if cost estimate is reliable
     const isCostReliable = isMeasurementsReliable && isWindowDoorCountReliable;
@@ -133,26 +134,37 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
     // Google Maps Embed (Regular Map with Street View Link)
     if (lat && lon) {
-      const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || "YOUR_API_KEY";
-      resultsHtml += `
-        <h3 style="color: #555;">Location Map (Google Maps)</h3>
-        <div style="text-align: center;">
-          <iframe
-            width="100%"
-            height="200"
-            frameborder="0"
-            style="border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
-            src="https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${lat},${lon}&center=${lat},${lon}&zoom=18"
-            allowfullscreen>
-          </iframe>
-          <p style="font-size: 0.9em; margin-top: 5px;">
-            <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}&heading=210&pitch=10&fov=90" target="_blank" style="color: #2196F3; text-decoration: none;">
-              Open Street View in New Tab
+      if (googleMapsApiKey) {
+        resultsHtml += `
+          <h3 style="color: #555;">Location Map (Google Maps)</h3>
+          <div style="text-align: center;">
+            <iframe
+              width="100%"
+              height="200"
+              frameborder="0"
+              style="border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
+              src="https://www.google.com/maps/embed/v1/place?key=${googleMapsApiKey}&q=${lat},${lon}&center=${lat},${lon}&zoom=18"
+              allowfullscreen>
+            </iframe>
+            <p style="font-size: 0.9em; margin-top: 5px;">
+              <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}&heading=210&pitch=10&fov=90" target="_blank" style="color: #2196F3; text-decoration: none;">
+                Open Street View in New Tab
+              </a>
+              (may not be available for all locations)
+            </p>
+          </div>
+        `;
+      } else {
+        resultsHtml += `
+          <h3 style="color: #555;">Location Map (Google Maps)</h3>
+          <p style="color: #ff9800; text-align: center;">Location map unavailable: Google Maps API key is missing.</p>
+          <p style="text-align: center;">
+            <a href="https://www.google.com/maps/search/?api=1&query=${lat},${lon}" target="_blank" style="color: #2196F3; text-decoration: none;">
+              View on Google Maps
             </a>
-            (may not be available for all locations)
           </p>
-        </div>
-      `;
+        `;
+      }
     }
 
     // Contact Us Button
