@@ -35,7 +35,15 @@ exports.handler = async (event) => {
       throw new Error("Missing address in request body");
     }
 
+    if (images && !Array.isArray(images)) {
+      console.error("Images is not an array:", images);
+      throw new Error("Invalid images data: Expected an array");
+    }
+
     console.log(`Processing remodel for address: ${address}, number of images received: ${images?.length || 0}`);
+    if (images?.length > 0) {
+      console.log("Sample image data (first 50 chars):", images[0]?.substring(0, 50));
+    }
 
     const addressResponse = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
@@ -76,6 +84,7 @@ exports.handler = async (event) => {
     const timelineEstimate = calculateTimeline(measurements.area, windowDoorCount);
 
     const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+    console.log("Google Maps API key retrieved:", GOOGLE_MAPS_API_KEY ? "Present" : "Missing");
     let satelliteImage = null;
     let satelliteImageError = null;
     if (GOOGLE_MAPS_API_KEY) {
@@ -126,13 +135,13 @@ exports.handler = async (event) => {
         processedImage,
         satelliteImage,
         satelliteImageError,
-        googleMapsApiKey: GOOGLE_MAPS_API_KEY, // Add API key to response
+        googleMapsApiKey: GOOGLE_MAPS_API_KEY,
       }),
     };
   } catch (error) {
     console.error("Error in remodel:", error.message, error.stack);
     return {
-      statusCode: error.message.includes("Invalid address") ? 400 : 500,
+      statusCode: error.message.includes("Invalid address") || error.message.includes("Invalid images data") ? 400 : 500,
       body: JSON.stringify({ error: error.message }),
     };
   }
@@ -229,28 +238,33 @@ async function analyzePhotos(images) {
     };
   }
 
-  try {
-    let windowCount = 0;
-    let doorCount = 0;
-    let windowSizes = [];
-    let doorSizes = [];
-    let firstValidImage = null;
-    let isReliable = false;
+  let windowCount = 0;
+  let doorCount = 0;
+  let windowSizes = [];
+  let doorSizes = [];
+  let firstValidImage = null;
+  let isReliable = false;
 
-    const photosToProcess = images.slice(0, 5);
-    console.log(`Processing ${photosToProcess.length} photos (capped at 5)`);
+  const photosToProcess = images.slice(0, 5);
+  console.log(`Processing ${photosToProcess.length} photos (capped at 5)`);
 
-    for (const [index, image] of photosToProcess.entries()) {
-      console.log(`Processing photo ${index + 1}/${photosToProcess.length}, image data length: ${image.length}`);
+  for (const [index, image] of photosToProcess.entries()) {
+    try {
+      console.log(`Processing photo ${index + 1}/${photosToProcess.length}, image data length: ${image?.length || 0}`);
 
-      if (typeof image !== "string" || !image.startsWith("data:image/")) {
-        console.error(`Invalid image data for photo ${index + 1}, skipping:`, image.substring(0, 50));
+      if (!image || typeof image !== "string") {
+        console.error(`Invalid image data for photo ${index + 1}: Image is null or not a string`);
+        continue;
+      }
+
+      if (!image.startsWith("data:image/")) {
+        console.error(`Invalid image format for photo ${index + 1}:`, image.substring(0, 50));
         continue;
       }
 
       const base64Image = image.split(",")[1];
       if (!base64Image) {
-        console.error(`Failed to extract base64 data from photo ${index + 1}, skipping`);
+        console.error(`Failed to extract base64 data from photo ${index + 1}`);
         continue;
       }
 
@@ -259,6 +273,11 @@ async function analyzePhotos(images) {
         console.log("First valid image captured for response");
       }
 
+      // Add timeout to fetch request
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10-second timeout
+
+      console.log(`Making Clarifai API call for photo ${index + 1}`);
       const response = await fetch(
         "https://api.clarifai.com/v2/models/general-image-recognition/outputs",
         {
@@ -270,8 +289,11 @@ async function analyzePhotos(images) {
           body: JSON.stringify({
             inputs: [{ data: { image: { base64: base64Image } } }],
           }),
+          signal: controller.signal,
         }
       );
+
+      clearTimeout(timeoutId);
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -306,28 +328,25 @@ async function analyzePhotos(images) {
         }
       });
       console.log(`Photo ${index + 1} processed: ${windowCount} windows, ${doorCount} doors detected so far`);
+    } catch (error) {
+      if (error.name === "AbortError") {
+        console.error(`Clarifai API call timed out for photo ${index + 1}`);
+      } else {
+        console.error(`Error processing photo ${index + 1}:`, error.message, error.stack);
+      }
+      continue;
     }
-
-    console.log(`Total detected: ${windowCount} windows and ${doorCount} doors`);
-    return {
-      windows: windowCount,
-      doors: doorCount,
-      windowSizes,
-      doorSizes,
-      image: firstValidImage,
-      isReliable,
-    };
-  } catch (error) {
-    console.error("Error analyzing photos:", error.message, error.stack);
-    return {
-      windows: images.length * 4,
-      doors: images.length * 2,
-      windowSizes: Array(images.length * 4).fill("3ft x 4ft"),
-      doorSizes: Array(images.length * 2).fill("3ft x 7ft"),
-      image: null,
-      isReliable: false,
-    };
   }
+
+  console.log(`Total detected: ${windowCount} windows and ${doorCount} doors`);
+  return {
+    windows: windowCount,
+    doors: doorCount,
+    windowSizes,
+    doorSizes,
+    image: firstValidImage,
+    isReliable,
+  };
 }
 
 function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo) {
