@@ -9,7 +9,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
   try {
     document.getElementById("results").innerHTML = "<p>Loading...</p>";
-    console.log("Sending request to /.netlify/functions/remodel with data:", { address, images, windowCount, doorCount });
+    console.log("Sending request to /.netlify/functions/remodel with data:", { address, images: images.length, windowCount, doorCount });
     const response = await fetch("/.netlify/functions/remodel", {
       method: "POST",
       body: JSON.stringify({
@@ -36,9 +36,12 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
     if (result.error) throw new Error(result.error);
 
+    // Extract data with fallbacks
     const addressDisplay = result.addressData?.display_name || "Unknown Address";
     const measurements = result.measurements || { width: "N/A", length: "N/A", area: "N/A" };
-    const windowDoorCount = result.windowDoorCount || { windows: 0, doors: 0, windowSizes: [], doorSizes: [] };
+    const isMeasurementsReliable = result.isMeasurementsReliable || false;
+    const windowDoorCount = result.windowDoorCount || { windows: 0, doors: 0, windowSizes: [], doorSizes: [], isReliable: false };
+    const isWindowDoorCountReliable = windowDoorCount.isReliable || false;
     const materialEstimates = result.materialEstimates || ["No estimates available"];
     const costEstimates = result.costEstimates || { totalCost: "N/A", costBreakdown: ["No cost breakdown available"] };
     const timelineEstimate = result.timelineEstimate || "N/A";
@@ -49,16 +52,10 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const lat = result.addressData?.lat || 0;
     const lon = result.addressData?.lon || 0;
 
-    // Prepare SMS message with a cleaner format
-    const smsMessage = `Remodel Estimate for ${addressDisplay}\n` +
-                      `Dimensions: ${measurements.width}ft x ${measurements.length}ft\n` +
-                      `Area: ${measurements.area} sq ft\n` +
-                      `Windows: ${windowDoorCount.windows}, Doors: ${windowDoorCount.doors}\n` +
-                      `Total Cost (Est.): $${costEstimates.totalCost}\n` +
-                      `Timeline (Est.): ${timelineEstimate} weeks\n` +
-                      `Details: ${materialEstimates.join("; ")}`;
+    // Determine if cost estimate is reliable
+    const isCostReliable = isMeasurementsReliable && isWindowDoorCountReliable;
 
-    // Simplified and styled results HTML
+    // Results HTML
     let resultsHtml = `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
         <h2 style="color: #333; text-align: center;">Remodel Estimate</h2>
@@ -67,25 +64,45 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
         <p><strong>Dimensions:</strong> ${measurements.width}ft x ${measurements.length}ft (Area: ${measurements.area} sq ft)</p>
         <p><strong>Height (Est.):</strong> ${roofInfo.height}ft | <strong>Roof Pitch:</strong> ${roofInfo.pitch}</p>
         <p><strong>Windows:</strong> ${windowDoorCount.windows} | <strong>Doors:</strong> ${windowDoorCount.doors}</p>
+    `;
 
-        <h3 style="color: #555;">Material Breakdown</h3>
-        <ul style="list-style-type: disc; padding-left: 20px;">${materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
+    // Material Estimates
+    resultsHtml += `
+      <h3 style="color: #555;">Material Breakdown</h3>
+      <ul style="list-style-type: disc; padding-left: 20px;">${materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
+    `;
 
-        <h3 style="color: #555;">Cost Estimate (Approximate)</h3>
+    // Cost Estimate (conditional)
+    resultsHtml += `
+      <h3 style="color: #555;">Cost Estimate (Approximate)</h3>
+    `;
+    if (isCostReliable) {
+      resultsHtml += `
         <p><strong>Total:</strong> $${costEstimates.totalCost}</p>
         <ul style="list-style-type: disc; padding-left: 20px;">${costEstimates.costBreakdown.map(item => `<li>${item}</li>`).join("")}</ul>
         <p style="font-style: italic; color: #777; font-size: 0.9em;">Costs are approximate and may vary based on final measurements, material prices, and labor rates.</p>
+      `;
+    } else {
+      resultsHtml += `
+        <p style="color: #ff9800;">Cost estimate unavailable due to insufficient data accuracy. Please provide more details or upload clear photos of the house exterior.</p>
+      `;
+    }
 
-        <h3 style="color: #555;">Estimated Timeline</h3>
-        <p>${timelineEstimate} weeks</p>
-        <p style="font-style: italic; color: #777; font-size: 0.9em;">Timeline depends on project scope, weather, and crew availability.</p>
-
-        <h3 style="color: #555;">Permit Information</h3>
-        <p>Remodeling in Indiana may require permits for structural, electrical, or plumbing work. Contact your local building department.</p>
-        <p><a href="https://www.in.gov/dhs/building-construction/permits/" target="_blank" style="color: #2196F3; text-decoration: none;">Learn More About Indiana Permits</a></p>
+    // Timeline
+    resultsHtml += `
+      <h3 style="color: #555;">Estimated Timeline</h3>
+      <p>${timelineEstimate} weeks</p>
+      <p style="font-style: italic; color: #777; font-size: 0.9em;">Timeline depends on project scope, weather, and crew availability.</p>
     `;
 
-    // Visual Elements (Images and Maps)
+    // Permit Information
+    resultsHtml += `
+      <h3 style="color: #555;">Permit Information</h3>
+      <p>Remodeling in Indiana may require permits for structural, electrical, or plumbing work. Contact your local building department.</p>
+      <p><a href="https://www.in.gov/dhs/building-construction/permits/" target="_blank" style="color: #2196F3; text-decoration: none;">Learn More About Indiana Permits</a></p>
+    `;
+
+    // Uploaded Image
     if (processedImage) {
       resultsHtml += `
         <h3 style="color: #555;">Uploaded Image</h3>
@@ -93,10 +110,16 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
           <img src="${processedImage}" alt="Uploaded House Image" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
         </div>
       `;
-    } else {
-      resultsHtml += `<p style="color: #ff9800; text-align: center;">No uploaded image available.</p>`;
     }
 
+    // Note About Multiple Images
+    if (images.length > 0) {
+      resultsHtml += `
+        <p style="font-style: italic; color: #777; font-size: 0.9em;">Processed ${images.length} image(s) for window and door detection. Up to 5 images are supported.</p>
+      `;
+    }
+
+    // Satellite Image
     if (satelliteImage) {
       resultsHtml += `
         <h3 style="color: #555;">Satellite View (Google Maps)</h3>
@@ -104,44 +127,42 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
           <img src="${satelliteImage}" alt="Satellite View of House" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
         </div>
       `;
-    } else {
-      const errorMessage = satelliteImageError || "Satellite view unavailable. Please ensure the Google Maps Static API is enabled.";
-      resultsHtml += `<p style="color: #ff9800; text-align: center;">${errorMessage}</p>`;
+    } else if (satelliteImageError) {
+      resultsHtml += `<p style="color: #ff9800; text-align: center;">${satelliteImageError}</p>`;
     }
 
+    // Google Maps Embed (Regular Map with Street View Link)
     if (lat && lon) {
+      const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY || "YOUR_API_KEY";
       resultsHtml += `
-        <h3 style="color: #555;">Location Map (OpenStreetMap)</h3>
+        <h3 style="color: #555;">Location Map (Google Maps)</h3>
         <div style="text-align: center;">
           <iframe
             width="100%"
             height="200"
             frameborder="0"
-            scrolling="no"
-            marginheight="0"
-            marginwidth="0"
-            src="https://www.openstreetmap.org/export/embed.html?bbox=${lon - 0.001},${lat - 0.001},${lon + 0.001},${lat + 0.001}&layer=mapnik&marker=${lat},${lon}"
-            style="border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+            style="border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
+            src="https://www.google.com/maps/embed/v1/place?key=${GOOGLE_MAPS_API_KEY}&q=${lat},${lon}&center=${lat},${lon}&zoom=18"
+            allowfullscreen>
           </iframe>
+          <p style="font-size: 0.9em; margin-top: 5px;">
+            <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}&heading=210&pitch=10&fov=90" target="_blank" style="color: #2196F3; text-decoration: none;">
+              Open Street View in New Tab
+            </a>
+            (may not be available for all locations)
+          </p>
         </div>
       `;
     }
 
-    // Text Diagram
-    const textDiagram = generateTextDiagram(measurements, windowDoorCount, roofInfo);
-    resultsHtml += `
-      <h3 style="color: #555;">House Diagram</h3>
-      <pre style="font-family: monospace; background: #f5f5f5; padding: 10px; border-radius: 5px; border: 1px solid #ddd;">${textDiagram}</pre>
-    `;
-
-    // SMS and Contact Section
+    // Contact Us Button
+    const smsMessage = `I'd like more info or a quote for my remodel at ${addressDisplay}. Please contact me!`;
     resultsHtml += `
       <h3 style="color: #555;">Next Steps with Indy Home Improvements</h3>
-      <p>Share this estimate or request a detailed quote by texting us directly.</p>
+      <p>Ready to discuss your project? Contact us directly to request more info or a detailed quote.</p>
       <p style="font-size: 0.9em; color: #777;">By clicking below, you agree to send an SMS to Indy Home Improvements at 765-366-3344. Standard messaging rates may apply. We will not share your phone number. Reply STOP to opt out.</p>
       <div style="text-align: center; margin-top: 10px;">
-        <a href="sms:7653663344?body=${encodeURIComponent(smsMessage)}" style="display: inline-block; padding: 12px 24px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 5px; margin: 5px; font-weight: bold;">Share Estimate</a>
-        <a href="sms:7653663344?body=${encodeURIComponent(`I'd like a detailed quote for my remodel at ${addressDisplay}. Please contact me!`)}" style="display: inline-block; padding: 12px 24px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px; margin: 5px; font-weight: bold;">Request Quote</a>
+        <a href="sms:7653663344?body=${encodeURIComponent(smsMessage)}" style="display: inline-block; padding: 12px 24px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Contact Us</a>
       </div>
       </div>
     `;
@@ -149,14 +170,21 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     document.getElementById("results").innerHTML = resultsHtml;
   } catch (error) {
     console.error("Fetch error:", error);
-    document.getElementById("results").innerHTML = `<p style="color: #f44336; text-align: center;">Error: ${error.message}</p>`;
+    document.getElementById("results").innerHTML = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; text-align: center;">
+        <p style="color: #f44336;">Error: ${error.message}</p>
+        <p>Please try again or contact Indy Home Improvements at 765-366-3344 for assistance.</p>
+      </div>
+    `;
   }
 });
 
 document.getElementById("images").addEventListener("change", (e) => {
   const preview = document.getElementById("imagePreview");
   preview.innerHTML = "";
-  Array.from(e.target.files).forEach(file => {
+  const files = Array.from(e.target.files);
+  console.log(`Selected ${files.length} files for upload`);
+  files.forEach(file => {
     const img = document.createElement("img");
     img.src = URL.createObjectURL(file);
     img.style.maxWidth = "150px";
@@ -168,29 +196,10 @@ document.getElementById("images").addEventListener("change", (e) => {
 function fileToBase64(file) {
   return new Promise(resolve => {
     const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
+    reader.onload = () => {
+      console.log(`Converted file to base64, length: ${reader.result.length}`);
+      resolve(reader.result);
+    };
     reader.readAsDataURL(file);
   });
-}
-
-function generateTextDiagram(measurements, windowDoorCount, roofInfo) {
-  const { width, length } = measurements;
-  const { windows, doors, windowSizes, doorSizes } = windowDoorCount;
-  const { height } = roofInfo;
-
-  let diagram = `House Layout (Top View)\n`;
-  diagram += `+-------------------+\n`;
-  diagram += `| ${width}ft           |\n`;
-  diagram += `|                   |\n`;
-  for (let i = 0; i < windows; i++) {
-    diagram += `| [W${i + 1}] ${windowSizes[i] || "3ft x 4ft"}    |\n`;
-  }
-  for (let i = 0; i < doors; i++) {
-    diagram += `| [D${i + 1}] ${doorSizes[i] || "3ft x 7ft"}    |\n`;
-  }
-  diagram += `|                   |\n`;
-  diagram += `|           ${length}ft |\n`;
-  diagram += `+-------------------+\n`;
-  diagram += `Height: ${height}ft\n`;
-  return diagram;
 }
