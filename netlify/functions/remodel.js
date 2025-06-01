@@ -248,10 +248,10 @@ async function analyzePhotos(photos) {
   if (!CLARIFAI_API_KEY) {
     console.error("Clarifai API key missing, using fallback");
     return {
-      windows: allImages.length * 4,
-      doors: allImages.length * 2,
-      windowSizes: Array(allImages.length * 4).fill("3ft x 4ft"),
-      doorSizes: Array(allImages.length * 2).fill("3ft x 7ft"),
+      windows: allImages.length * 2,
+      doors: allImages.length * 1,
+      windowSizes: Array(allImages.length * 2).fill("3ft x 4ft"),
+      doorSizes: Array(allImages.length * 1).fill("3ft x 7ft"),
       images: {},
       isReliable: false,
     };
@@ -264,12 +264,13 @@ async function analyzePhotos(photos) {
   const processedImages = {};
   let isReliable = false;
 
+  // Process only 1 image per direction to minimize API calls and prevent timeouts
   for (const direction of directions) {
     const images = photos[direction] || [];
     if (images.length === 0) continue;
 
     console.log(`Processing ${images.length} photos for ${direction} direction`);
-    const photosToProcess = images.slice(0, 2); // Limit to 2 per direction to reduce load
+    const photosToProcess = images.slice(0, 1); // Limit to 1 per direction to reduce load
 
     for (const [index, image] of photosToProcess.entries()) {
       try {
@@ -292,8 +293,15 @@ async function analyzePhotos(photos) {
         }
 
         // Skip large images to reduce load
-        if (base64Image.length > 1000000) { // ~1MB
+        if (base64Image.length > 500000) { // ~500KB
           console.log(`Skipping ${direction} photo ${index + 1}: Image too large (${base64Image.length} bytes)`);
+          windowCount += 2; // Fallback for skipped image
+          doorCount += 1;
+          windowSizes.push("3ft x 4ft", "3ft x 4ft");
+          doorSizes.push("3ft x 7ft");
+          if (!processedImages[direction]) {
+            processedImages[direction] = image;
+          }
           continue;
         }
 
@@ -303,7 +311,7 @@ async function analyzePhotos(photos) {
         }
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5-second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3-second timeout
 
         console.log(`Making Clarifai API call for ${direction} photo ${index + 1}`);
         const response = await fetch(
@@ -326,6 +334,10 @@ async function analyzePhotos(photos) {
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`Clarifai API error for ${direction} photo ${index + 1}: ${response.status} - ${errorText}`);
+          windowCount += 2; // Fallback on error
+          doorCount += 1;
+          windowSizes.push("3ft x 4ft", "3ft x 4ft");
+          doorSizes.push("3ft x 7ft");
           continue;
         }
 
@@ -334,11 +346,19 @@ async function analyzePhotos(photos) {
           data = await response.json();
         } catch (jsonError) {
           console.error(`Failed to parse Clarifai response for ${direction} photo ${index + 1}:`, jsonError.message);
+          windowCount += 2; // Fallback on parse error
+          doorCount += 1;
+          windowSizes.push("3ft x 4ft", "3ft x 4ft");
+          doorSizes.push("3ft x 7ft");
           continue;
         }
 
         if (!data.outputs || !data.outputs[0] || !data.outputs[0].data || !data.outputs[0].data.concepts) {
           console.error(`Unexpected Clarifai response structure for ${direction} photo ${index + 1}:`, JSON.stringify(data));
+          windowCount += 2; // Fallback on invalid response
+          doorCount += 1;
+          windowSizes.push("3ft x 4ft", "3ft x 4ft");
+          doorSizes.push("3ft x 7ft");
           continue;
         }
 
@@ -362,6 +382,10 @@ async function analyzePhotos(photos) {
         } else {
           console.error(`Error processing ${direction} photo ${index + 1}:`, error.message, error.stack);
         }
+        windowCount += 2; // Fallback on any error
+        doorCount += 1;
+        windowSizes.push("3ft x 4ft", "3ft x 4ft");
+        doorSizes.push("3ft x 7ft");
         continue;
       }
     }
