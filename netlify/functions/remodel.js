@@ -126,6 +126,7 @@ exports.handler = async (event) => {
         processedImage,
         satelliteImage,
         satelliteImageError,
+        googleMapsApiKey: GOOGLE_MAPS_API_KEY, // Add API key to response
       }),
     };
   } catch (error) {
@@ -236,7 +237,6 @@ async function analyzePhotos(images) {
     let firstValidImage = null;
     let isReliable = false;
 
-    // Process up to 5 images
     const photosToProcess = images.slice(0, 5);
     console.log(`Processing ${photosToProcess.length} photos (capped at 5)`);
 
