@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Remodel Details - Indy Home Improvements</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f5f5f5;
+    }
+    h1 {
+      text-align: center;
+      color: #333;
+    }
+    .details-container {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h3 {
+      color: #555;
+      margin-top: 20px;
+    }
+    p {
+      margin: 5px 0;
+    }
+    img {
+      max-width: 100%;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+      margin: 10px 0;
+    }
+    .error {
+      color: #f44336;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <h1>Remodel Details</h1>
+  <div id="details" class="details-container"></div>
+
+  <script>
+    // Get remodelId from URL
+    const remodelId = window.location.pathname.split("/").pop();
+
+    // Fetch data from Netlify Function
+    fetch(`/.netlify/functions/get-remodel-details?remodelId=${remodelId}`)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status} - ${response.statusText}`);
+        }
+        return response.json();
+      })
+      .then(data => {
+        if (data.error) {
+          throw new Error(data.error);
+        }
+
+        let html = `
+          <p><strong>Address:</strong> ${data.address}</p>
+          <p><strong>Area:</strong> ${data.measurements.area} sq ft</p>
+          <p><strong>Dimensions:</strong> ${data.measurements.width}ft x ${data.measurements.length}ft</p>
+          <p><strong>Height (Est.):</strong> ${data.roofInfo.height}ft</p>
+          <p><strong>Roof Pitch:</strong> ${data.roofInfo.pitch}</p>
+          <p><strong>Windows:</strong> ${data.windowDoorCount.windows}</p>
+          <p><strong>Doors:</strong> ${data.windowDoorCount.doors}</p>
+          <p><strong>Total Cost (Est.):</strong> $${data.costEstimates.totalCost}</p>
+          <p><strong>Timeline (Est.):</strong> ${data.timelineEstimate} weeks</p>
+        `;
+
+        // Material Estimates
+        if (data.materialEstimates && data.materialEstimates.length > 0) {
+          html += `
+            <h3>Material Estimates</h3>
+            <ul>${data.materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
+          `;
+        }
+
+        // Cost Breakdown
+        if (data.costEstimates?.costBreakdown && data.costEstimates.costBreakdown.length > 0) {
+          html += `
+            <h3>Cost Breakdown</h3>
+            <ul>${data.costEstimates.costBreakdown.map(item => `<li>${item}</li>`).join("")}</ul>
+          `;
+        }
+
+        // Images by Direction
+        const directions = ["north", "south", "east", "west"];
+        for (const direction of directions) {
+          if (data.processedImages?.[direction]) {
+            html += `
+              <h3>${direction.charAt(0).toUpperCase() + direction.slice(1)}-Facing Image</h3>
+              <img src="${data.processedImages[direction]}" alt="${direction} image">
+            `;
+          }
+        }
+
+        // Satellite Image
+        if (data.satelliteImage) {
+          html += `
+            <h3>Satellite View</h3>
+            <img src="${data.satelliteImage}" alt="Satellite View">
+          `;
+        } else if (data.satelliteImageError) {
+          html += `<p style="color: #ff9800;">Satellite View Error: ${data.satelliteImageError}</p>`;
+        }
+
+        document.getElementById("details").innerHTML = html;
+      })
+      .catch(error => {
+        console.error("Error fetching remodel details:", error);
+        document.getElementById("details").innerHTML = '<p class="error">Error loading remodel details: ' + error.message + '</p>';
+      });
+  </script>
+</body>
+</html>
