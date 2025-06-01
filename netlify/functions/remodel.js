@@ -66,14 +66,28 @@ exports.handler = async (event) => {
       doorSizes: windowDoorInfo.doorSizes,
     };
     const processedImage = windowDoorInfo.image;
+    console.log("Processed image included in response:", !!processedImage);
 
     const materialEstimates = calculateMaterialEstimates(measurements, windowDoorCount, roofInfo);
 
-    // Fetch satellite image (requires GOOGLE_MAPS_API_KEY environment variable)
     const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
     let satelliteImage = null;
     if (GOOGLE_MAPS_API_KEY) {
       satelliteImage = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=18&size=300x300&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
+      console.log("Generated Google Maps satellite image URL:", satelliteImage);
+
+      try {
+        const imageResponse = await fetch(satelliteImage);
+        if (!imageResponse.ok) {
+          console.error("Google Maps API request failed:", imageResponse.status, await imageResponse.text());
+          satelliteImage = null;
+        }
+      } catch (error) {
+        console.error("Error fetching Google Maps satellite image:", error.message);
+        satelliteImage = null;
+      }
+    } else {
+      console.log("Google Maps API key missing, satellite image not generated.");
     }
 
     const remodelEntry = {
@@ -84,12 +98,13 @@ exports.handler = async (event) => {
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     };
 
-    await db.collection("remodels").add(remodelEntry);
-    console.log("Remodel entry saved to Firestore");
+    const docRef = await db.collection("remodels").add(remodelEntry);
+    console.log("Remodel entry saved to Firestore with ID:", docRef.id);
 
     return {
       statusCode: 200,
       body: JSON.stringify({
+        remodelId: docRef.id,
         addressData: addressData[0],
         measurements,
         windowDoorCount,
@@ -155,15 +170,13 @@ async function getBuildingData(lat, lon) {
   const length = Math.round(Math.min(latFeet, lonFeet));
   const area = width * length;
 
-  // Estimate roof info
-  const pitch = "6/12"; // Standard pitch assumption
-  const pitchFactor = 1.118; // For 6/12 pitch (sqrt(1 + (6/12)^2))
-  const roofArea = area * pitchFactor; // Adjust area for pitch
-  const roofMaterial = "Asphalt Shingles"; // Common default
+  const pitch = "6/12";
+  const pitchFactor = 1.118;
+  const roofArea = area * pitchFactor;
+  const roofMaterial = "Asphalt Shingles";
 
-  // Estimate height (assume 1 story + roof)
-  const baseHeight = building.tags?.levels ? parseInt(building.tags.levels) * 10 : 10; // 10ft per story
-  const roofHeight = (width / 2) * (6 / 12); // Roof height based on pitch
+  const baseHeight = building.tags?.levels ? parseInt(building.tags.levels) * 10 : 10;
+  const roofHeight = (width / 2) * (6 / 12);
   const totalHeight = baseHeight + roofHeight;
 
   return {
@@ -198,8 +211,8 @@ async function analyzePhotos(images) {
     let doorSizes = [];
     let firstValidImage = null;
 
-    const photosToProcess = images.slice(0, 2);
-    console.log(`Processing ${photosToProcess.length} photos (limited to 2)`);
+    const photosToProcess = images.slice(0, 1);
+    console.log(`Processing ${photosToProcess.length} photo (limited to 1 for free-tier)`);
 
     for (const [index, image] of photosToProcess.entries()) {
       console.log(`Processing photo ${index + 1}/${photosToProcess.length}`);
@@ -217,6 +230,7 @@ async function analyzePhotos(images) {
 
       if (!firstValidImage) {
         firstValidImage = image;
+        console.log("First valid image captured for response");
       }
 
       const response = await fetch(
@@ -255,7 +269,6 @@ async function analyzePhotos(images) {
       data.outputs[0].data.concepts.forEach(concept => {
         if (concept.name.toLowerCase().includes("window")) {
           windowCount++;
-          // Assume size variation based on confidence (simplified)
           const size = concept.value > 0.9 ? "4ft x 5ft" : "3ft x 4ft";
           windowSizes.push(size);
         }
