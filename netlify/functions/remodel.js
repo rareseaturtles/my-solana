@@ -70,8 +70,12 @@ exports.handler = async (event) => {
 
     const materialEstimates = calculateMaterialEstimates(measurements, windowDoorCount, roofInfo);
 
+    const costEstimates = calculateCostEstimates(materialEstimates, windowDoorCount, measurements.area);
+    const timelineEstimate = calculateTimeline(measurements.area, windowDoorCount);
+
     const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
     let satelliteImage = null;
+    let satelliteImageError = null;
     if (GOOGLE_MAPS_API_KEY) {
       satelliteImage = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=18&size=300x300&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
       console.log("Generated Google Maps satellite image URL:", satelliteImage);
@@ -79,15 +83,19 @@ exports.handler = async (event) => {
       try {
         const imageResponse = await fetch(satelliteImage);
         if (!imageResponse.ok) {
-          console.error("Google Maps API request failed:", imageResponse.status, await imageResponse.text());
+          const errorText = await imageResponse.text();
+          console.error("Google Maps API request failed:", imageResponse.status, errorText);
+          satelliteImageError = `Google Maps API error: ${errorText}`;
           satelliteImage = null;
         }
       } catch (error) {
         console.error("Error fetching Google Maps satellite image:", error.message);
+        satelliteImageError = `Network error: ${error.message}`;
         satelliteImage = null;
       }
     } else {
       console.log("Google Maps API key missing, satellite image not generated.");
+      satelliteImageError = "Google Maps API key is missing. Please ensure the Maps Static API is enabled and the key is configured.";
     }
 
     const remodelEntry = {
@@ -109,9 +117,12 @@ exports.handler = async (event) => {
         measurements,
         windowDoorCount,
         materialEstimates,
+        costEstimates,
+        timelineEstimate,
         roofInfo,
         processedImage,
         satelliteImage,
+        satelliteImageError,
       }),
     };
   } catch (error) {
@@ -318,4 +329,53 @@ function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo) {
   const roofing = `Roofing (${roofMaterial}): ${Math.round(roofArea)} sq ft`;
 
   return [siding, paint, ...windowEstimates, ...doorEstimates, roofing];
+}
+
+function calculateCostEstimates(materialEstimates, windowDoorCount, area) {
+  console.log("Calculating cost estimates...");
+  let totalCost = 0;
+  const costBreakdown = [];
+
+  materialEstimates.forEach(item => {
+    if (item.includes("Siding")) {
+      const sidingArea = parseInt(item.match(/\d+/)[0]);
+      const cost = sidingArea * 5; // $5 per sq ft
+      totalCost += cost;
+      costBreakdown.push(`Siding: $${cost} (${sidingArea} sq ft at $5/sq ft)`);
+    } else if (item.includes("Exterior Paint")) {
+      const gallons = parseInt(item.match(/\d+/)[0]);
+      const cost = gallons * 40; // $40 per gallon
+      totalCost += cost;
+      costBreakdown.push(`Exterior Paint: $${cost} (${gallons} gallons at $40/gallon)`);
+    } else if (item.includes("Window")) {
+      const size = item.match(/\d+ft x \d+ft/)[0];
+      const cost = size === "4ft x 5ft" ? 500 : 300;
+      totalCost += cost;
+      costBreakdown.push(`${item}: $${cost}`);
+    } else if (item.includes("Door")) {
+      const size = item.match(/\d+ft x \d+ft/)[0];
+      const cost = size === "3ft x 8ft" ? 800 : 600;
+      totalCost += cost;
+      costBreakdown.push(`${item}: $${cost}`);
+    } else if (item.includes("Roofing")) {
+      const roofArea = parseInt(item.match(/\d+/)[0]);
+      const cost = roofArea * 4; // $4 per sq ft for asphalt shingles
+      totalCost += cost;
+      costBreakdown.push(`Roofing: $${cost} (${roofArea} sq ft at $4/sq ft)`);
+    }
+  });
+
+  const laborCost = area * 50; // $50 per sq ft of house area
+  totalCost += laborCost;
+  costBreakdown.push(`Labor: $${laborCost} (estimated at $50/sq ft for ${area} sq ft)`);
+
+  return { totalCost: Math.round(totalCost), costBreakdown };
+}
+
+function calculateTimeline(area, windowDoorCount) {
+  console.log("Calculating timeline estimates...");
+  let weeks = Math.ceil(area / 500);
+  const additionalDays = (windowDoorCount.windows + windowDoorCount.doors);
+  weeks += Math.ceil(additionalDays / 5);
+  return weeks;
 }
