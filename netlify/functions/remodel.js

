@@ -1,0 +1,211 @@
+const admin = require("firebase-admin");
+
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: "turtle-treasure-giveaway",
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
+      }),
+    });
+    console.log("Firebase Admin initialized successfully in remodel");
+  } catch (error) {
+    console.error("Firebase Admin initialization failed in remodel:", error.message);
+    throw error;
+  }
+}
+
+const db = admin.firestore();
+
+exports.handler = async (event) => {
+  console.log("remodel invoked with event:", JSON.stringify(event));
+
+  try {
+    if (!event.body) {
+      throw new Error("Missing request body");
+    }
+    const { address, images, windowCount, doorCount } = JSON.parse(event.body);
+
+    if (!address) {
+      throw new Error("Missing address in request body");
+    }
+
+    console.log(`Processing remodel for address: ${address}, number of images: ${images?.length || 0}`);
+
+    // Step 1: Validate address and get coordinates
+    const addressResponse = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
+      { headers: { "User-Agent": "IndyHomeImprovements/1.0" } }
+    );
+    const addressData = await addressResponse.json();
+
+    if (!addressData.length) {
+      throw new Error("Invalid address: No results found");
+    }
+
+    console.log("Address validated:", addressData[0].display_name);
+    const lat = addressData[0].lat;
+    const lon = addressData[0].lon;
+
+    // Step 2: Get house dimensions
+    const measurements = await getHouseDimensions(lat, lon);
+
+    // Step 3: Analyze photos for window/door counts or use manual input
+    const windowDoorCount = windowCount && doorCount
+      ? { windows: parseInt(windowCount), doors: parseInt(doorCount) }
+      : await analyzePhotos(images || []);
+
+    // Step 4: Calculate material estimates
+    const materialEstimates = calculateMaterialEstimates(measurements, windowDoorCount);
+
+    // Step 5: Store in Firestore
+    const remodelEntry = {
+      address: addressData[0].display_name,
+      measurements,
+      windowDoorCount,
+      materialEstimates,
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    await db.collection("remodels").add(remodelEntry);
+    console.log("Remodel entry saved to Firestore");
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({
+        addressData: addressData[0],
+        measurements,
+        windowDoorCount,
+        materialEstimates,
+      }),
+    };
+  } catch (error) {
+    console.error("Error in remodel:", error.message);
+    return {
+      statusCode: error.message.includes("Invalid address") ? 400 : 500,
+      body: JSON.stringify({ error: error.message }),
+    };
+  }
+};
+
+async function getHouseDimensions(lat, lon) {
+  console.log("Fetching house dimensions...");
+
+  const overpassQuery = `
+    [out:json];
+    way["building"](around:50,${lat},${lon});
+    out body;
+    >;
+    out skel qt;
+  `;
+  const overpassResponse = await fetch(
+    `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`
+  );
+  const overpassData = await overpassResponse.json();
+
+  if (!overpassData.elements.length) {
+    console.log("No building found, using fallback dimensions");
+    return { width: 50, length: 30, area: 1500 };
+  }
+
+  const building = overpassData.elements.find(elem => elem.type === "way");
+  if (!building) {
+    return { width: 50, length: 30, area: 1500 };
+  }
+
+  const nodes = building.nodes.map(nodeId =>
+    overpassData.elements.find(elem => elem.id === nodeId && elem.type === "node")
+  );
+
+  const lats = nodes.map(node => node.lat);
+  const lons = nodes.map(node => node.lon);
+  const latDiff = Math.max(...lats) - Math.min(...lats);
+  const lonDiff = Math.max(...lons) - Math.min(...lons);
+
+  const latFeet = latDiff * 364320;
+  const lonFeet = lonDiff * 364320 * Math.cos((lat * Math.PI) / 180);
+
+  const width = Math.round(Math.max(latFeet, lonFeet));
+  const length = Math.round(Math.min(latFeet, lonFeet));
+  const area = width * length;
+
+  return { width, length, area };
+}
+
+async function analyzePhotos(images) {
+  console.log("Analyzing photos for windows and doors...");
+  if (!images || images.length === 0) {
+    console.log("No images provided, using default counts");
+    return { windows: 0, doors: 0 };
+  }
+
+  const CLARIFAI_API_KEY = process.env.CLARIFAI_API_KEY;
+  if (!CLARIFAI_API_KEY) {
+    console.error("Clarifai API key missing, using fallback");
+    return {
+      windows: images.length * 4,
+      doors: images.length * 2,
+    };
+  }
+
+  try {
+    let windowCount = 0;
+    let doorCount = 0;
+
+    for (const image of images) {
+      const base64Image = image.split(",")[1];
+      const response = await fetch(
+        "https://api.clarifai.com/v2/models/general-image-recognition/outputs",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Key ${CLARIFAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            inputs: [{ data: { image: { base64: base64Image } } }],
+          }),
+        }
+      );
+      const data = await response.json();
+      if (data.outputs[0].data.concepts) {
+        data.outputs[0].data.concepts.forEach(concept => {
+          if (concept.name.toLowerCase().includes("window")) windowCount++;
+          if (concept.name.toLowerCase().includes("door")) doorCount++;
+        });
+      }
+    }
+
+    return {
+      windows: windowCount,
+      doors: doorCount,
+    };
+  } catch (error) {
+    console.error("Error analyzing photos:", error.message);
+    return {
+      windows: images.length * 4,
+      doors: images.length * 2,
+    };
+  }
+}
+
+function calculateMaterialEstimates(measurements, windowDoorCount) {
+  console.log("Calculating material estimates...");
+  const { area } = measurements;
+  const { windows, doors } = windowDoorCount;
+
+  const sidingArea = area * 1.1;
+  const siding = `Siding: ${Math.round(sidingArea)} sq ft`;
+
+  const paintGallons = Math.ceil((area * 2) / 400);
+  const paint = `Exterior Paint: ${paintGallons} gallons`;
+
+  const windowArea = windows * (3 * 4);
+  const windowMaterial = `Window Glass: ${windowArea} sq ft (${windows} windows)`;
+
+  const doorArea = doors * (3 * 7);
+  const doorMaterial = `Door Material: ${doorArea} sq ft (${doors} doors)`;
+
+  return [siding, paint, windowMaterial, doorMaterial];
+}
