@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Indy Home Improvements - Get a free remodel estimate with precise measurements.">
+    <meta name="keywords" content="Home Improvements, Construction, Remodeling, Indy, Remodel Estimate">
+    <title>Indy Home Improvements - Remodel Estimate</title>
+
+    <!-- Favicon -->
+    <link rel="icon" href="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png" type="image/x-icon">
+
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Indy Home Improvements - Remodel Estimate">
+    <meta property="og:description" content="Get a free remodel estimate with precise measurements for your home.">
+    <meta property="og:image" content="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png">
+    <meta property="og:url" content="https://www.yoursite.com/remodel-tool">
+    <meta property="og:type" content="website">
+
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:title" content="Indy Home Improvements - Remodel Estimate">
+    <meta name="twitter:description" content="Get a free remodel estimate with precise measurements for your home.">
+    <meta name="twitter:image" content="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png">
+    <meta name="twitter:card" content="summary_large_image">
+
+    <!-- Link to external stylesheet -->
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <div class="overlay"></div>
+    <header>
+        <div class="services left">
+            Interior<br>
+            Bathrooms<br>
+            Kitchens<br>
+            Floors
+        </div>
+        <div class="header-content">
+            <img class="header-logo" src="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png" alt="Indy Home Improvements Logo">
+            <div>and Ying Construction</div>
+        </div>
+        <div class="services right">
+            Exterior<br>
+            Siding<br>
+            Windows & Doors
+        </div>
+    </header>
+    <main>
+        <p>Enter your property address and upload ground photos of all exterior walls (showing windows and doors) to get a free remodel estimate with precise measurements. Optionally, provide window and door counts for better accuracy.</p>
+        <form id="remodelForm">
+            <label for="address">Property Address:</label>
+            <input type="text" id="address" name="address" placeholder="123 Main St, City, State" required>
+            <br><br>
+            <label for="images">Upload Ground Photos:</label>
+            <input type="file" id="images" name="images" accept="image/*" multiple>
+            <br><br>
+            <label for="windowCount">Number of Windows (optional):</label>
+            <input type="number" id="windowCount" name="windowCount" min="0">
+            <br><br>
+            <label for="doorCount">Number of Doors (optional):</label>
+            <input type="number" id="doorCount" name="doorCount" min="0">
+            <br><br>
+            <button type="submit" class="cta-button">Generate Remodel Estimate</button>
+        </form>
+        <div id="imagePreview"></div>
+        <div id="results"></div>
+    </main>
+    <footer>
+        <p>© 2025 Indy Home Improvements. All Rights Reserved.</p>
+        <a href="https://www.facebook.com/improvingIndiana/" target="_blank">Visit us on Facebook</a>
+    </footer>
+    <script src="/script.js"></script>
+</body>
+</html>
