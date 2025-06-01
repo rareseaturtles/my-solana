@@ -26,156 +26,8 @@
     <!-- Swiper.js Styles -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper/swiper-bundle.min.css">
 
-    <style>
-        /* General styles */
-        body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 0;
-            background: url('https://i.ibb.co/j6LwhXX/blueprint.webp') no-repeat center center fixed;
-            background-size: cover;
-            color: #ffffff;
-            font-weight: bold;
-        }
-
-        /* Overlay for text readability */
-        .overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.4);
-            z-index: -1;
-        }
-
-        /* Header styles */
-        header {
-            background: rgba(44, 62, 80, 0.8);
-            height: 300px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 20px;
-            text-align: center;
-            color: white;
-        }
-
-        .header-logo {
-            height: 180px;
-            width: auto;
-        }
-
-        .services {
-            font-size: 18px;
-            line-height: 1.5;
-            text-align: center;
-        }
-
-        .services.left, .services.right {
-            width: 20%;
-        }
-
-        .header-content {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 20px;
-            width: 60%;
-        }
-
-        /* Main content */
-        main {
-            padding: 20px;
-            text-align: center;
-        }
-
-        main p {
-            font-size: 24px;
-            line-height: 1.6;
-            margin-bottom: 20px;
-        }
-
-        .cta-button {
-            background-color: #f39c12;
-            color: white;
-            padding: 15px 30px;
-            border: none;
-            border-radius: 8px;
-            font-size: 18px;
-            cursor: pointer;
-            text-decoration: none;
-            margin-top: 20px;
-        }
-
-        .cta-button:hover {
-            background-color: #d35400;
-        }
-
-        .image-container {
-            margin: 20px auto;
-            text-align: center;
-        }
-
-        .image-container img {
-            max-width: 90%;
-            height: auto;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-        }
-
-        /* Swiper container styles */
-        .swiper {
-            width: 90%;
-            margin: 20px auto;
-        }
-
-        .swiper-slide {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-
-        .swiper-slide img {
-            max-width: 100%;
-            height: auto;
-            border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-        }
-
-        /* Footer styles */
-        footer {
-            background-color: #2c3e50;
-            color: #ffffff;
-            text-align: center;
-            padding: 20px 10px;
-            border-top: 5px solid #f39c12;
-        }
-
-        footer a {
-            color: #f39c12;
-            text-decoration: none;
-        }
-
-        footer a:hover {
-            text-decoration: underline;
-        }
-
-        /* Responsive styles */
-        @media (max-width: 768px) {
-            .services {
-                font-size: 16px;
-            }
-
-            .header-content {
-                flex-direction: column;
-            }
-
-            header {
-                flex-wrap: wrap;
-            }
-        }
-    </style>
+    <!-- Link to external stylesheet -->
+    <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
     <div class="overlay"></div>
@@ -200,6 +52,7 @@
         <p>With years of experience and a commitment to excellence, we bring your vision to life.</p>
         <p>Call or Text us today: <strong>(765) 366-3344</strong></p>
         <button class="cta-button" onclick="window.location.href='sms:+17653663344'">Contact Us</button>
+        <button class="cta-button" onclick="openRemodelTool()">Get a Free Remodel Estimate</button>
 
         <h2>Most Recent Projects</h2>
         <div class="swiper">
@@ -230,7 +83,7 @@
         </div>
     </main>
     <footer>
-        <p>&copy; 2025 Indy Home Improvements. All Rights Reserved.</p>
+        <p>© 2025 Indy Home Improvements. All Rights Reserved.</p>
         <a href="https://www.facebook.com/improvingIndiana/" target="_blank">Visit us on Facebook</a>
     </footer>
 
@@ -248,6 +101,10 @@
                 prevEl: '.swiper-button-prev',
             },
         });
+
+        function openRemodelTool() {
+            window.location.href = "/remodel-tool";
+        }
     </script>
 </body>
 </html>
