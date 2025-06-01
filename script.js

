@@ -1,0 +1,56 @@
+document.getElementById("remodelForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const address = document.getElementById("address").value;
+  const images = Array.from(document.getElementById("images").files).map(file =>
+    fileToBase64(file)
+  );
+  const windowCount = document.getElementById("windowCount").value || null;
+  const doorCount = document.getElementById("doorCount").value || null;
+
+  try {
+    document.getElementById("results").innerHTML = "<p>Loading...</p>";
+    const response = await fetch("/.netlify/functions/remodel", {
+      method: "POST",
+      body: JSON.stringify({
+        address,
+        images: await Promise.all(images),
+        windowCount,
+        doorCount,
+      }),
+    });
+    const result = await response.json();
+    if (result.error) throw new Error(result.error);
+    document.getElementById("results").innerHTML = `
+      <h2>Remodel Estimate</h2>
+      <p><strong>Address:</strong> ${result.addressData.display_name}</p>
+      <p><strong>House Dimensions:</strong> ${result.measurements.width}ft x ${result.measurements.length}ft</p>
+      <p><strong>Total Area:</strong> ${result.measurements.area} sq ft</p>
+      <p><strong>Windows:</strong> ${result.windowDoorCount.windows}</p>
+      <p><strong>Doors:</strong> ${result.windowDoorCount.doors}</p>
+      <h3>Material Estimates:</h3>
+      <ul>${result.materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
+    `;
+  } catch (error) {
+    document.getElementById("results").innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+  }
+});
+
+document.getElementById("images").addEventListener("change", (e) => {
+  const preview = document.getElementById("imagePreview");
+  preview.innerHTML = "";
+  Array.from(e.target.files).forEach(file => {
+    const img = document.createElement("img");
+    img.src = URL.createObjectURL(file);
+    img.style.maxWidth = "150px";
+    img.style.margin = "5px";
+    preview.appendChild(img);
+  });
+});
+
+function fileToBase64(file) {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.readAsDataURL(file);
+  });
+}
