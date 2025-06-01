@@ -1,7 +1,24 @@
 [build]
+  command = "echo 'No build command needed'"
   publish = "."
   functions = "netlify/functions"
-  command = "npm install"
 
-[build.environment]
-  NODE_VERSION = "18"
+[[redirects]]
+  from = "/remodel-tool"
+  to = "/remodel-tool.html"
+  status = 200
+
+[[redirects]]
+  from = "/index.html"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/styles.css"
+  to = "/styles.css"
+  status = 200
+
+[[redirects]]
+  from = "/script.js"
+  to = "/script.js"
+  status = 200
