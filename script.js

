@@ -9,6 +9,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
   try {
     document.getElementById("results").innerHTML = "<p>Loading...</p>";
+    console.log("Sending request to /.netlify/functions/remodel with data:", { address, images, windowCount, doorCount });
     const response = await fetch("/.netlify/functions/remodel", {
       method: "POST",
       body: JSON.stringify({
@@ -18,19 +19,68 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
         doorCount,
       }),
     });
-    const result = await response.json();
+    console.log("Response status:", response.status);
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Server error: ${response.status} - ${text}`);
+    }
+
+    let result;
+    try {
+      result = await response.json();
+    } catch (jsonError) {
+      const text = await response.text();
+      throw new Error(`Failed to parse response as JSON: ${text}`);
+    }
+
     if (result.error) throw new Error(result.error);
-    document.getElementById("results").innerHTML = `
+
+    const addressDisplay = result.addressData?.display_name || "Unknown Address";
+    const measurements = result.measurements || { width: "N/A", length: "N/A", area: "N/A" };
+    const windowDoorCount = result.windowDoorCount || { windows: 0, doors: 0, windowSizes: [], doorSizes: [] };
+    const materialEstimates = result.materialEstimates || ["No estimates available"];
+    const roofInfo = result.roofInfo || { pitch: "N/A", height: "N/A", roofArea: "N/A", roofMaterial: "N/A" };
+    const processedImage = result.processedImage || null;
+    const satelliteImage = result.satelliteImage || null;
+
+    let resultsHtml = `
       <h2>Remodel Estimate</h2>
-      <p><strong>Address:</strong> ${result.addressData.display_name}</p>
-      <p><strong>House Dimensions:</strong> ${result.measurements.width}ft x ${result.measurements.length}ft</p>
-      <p><strong>Total Area:</strong> ${result.measurements.area} sq ft</p>
-      <p><strong>Windows:</strong> ${result.windowDoorCount.windows}</p>
-      <p><strong>Doors:</strong> ${result.windowDoorCount.doors}</p>
+      <p><strong>Address:</strong> ${addressDisplay}</p>
+      <p><strong>House Dimensions:</strong> ${measurements.width}ft x ${measurements.length}ft</p>
+      <p><strong>Total Area:</strong> ${measurements.area} sq ft</p>
+      <p><strong>Total Height:</strong> ${roofInfo.height}ft</p>
+      <p><strong>Roof Pitch:</strong> ${roofInfo.pitch}</p>
+      <p><strong>Windows:</strong> ${windowDoorCount.windows}</p>
+      <p><strong>Doors:</strong> ${windowDoorCount.doors}</p>
       <h3>Material Estimates:</h3>
-      <ul>${result.materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
+      <ul>${materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
     `;
+
+    if (processedImage) {
+      resultsHtml += `
+        <h3>Uploaded Image:</h3>
+        <img src="${processedImage}" alt="Uploaded House Image" style="max-width: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);">
+      `;
+    }
+
+    if (satelliteImage) {
+      resultsHtml += `
+        <h3>Satellite View:</h3>
+        <img src="${satelliteImage}" alt="Satellite View of House" style="max-width: 300px; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);">
+      `;
+    }
+
+    // Add ASCII art representation of the house
+    const asciiArt = generateHouseAscii(measurements.width, measurements.length, roofInfo.height);
+    resultsHtml += `
+      <h3>House Diagram (ASCII Art):</h3>
+      <pre style="font-family: monospace; white-space: pre-wrap;">${asciiArt}</pre>
+    `;
+
+    document.getElementById("results").innerHTML = resultsHtml;
   } catch (error) {
+    console.error("Fetch error:", error);
     document.getElementById("results").innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
   }
 });
@@ -53,4 +103,33 @@ function fileToBase64(file) {
     reader.onload = () => resolve(reader.result);
     reader.readAsDataURL(file);
   });
+}
+
+function generateHouseAscii(width, length, height) {
+  // Simple ASCII art representation of a house
+  const roofHeight = Math.floor(height / 3);
+  const wallsHeight = height - roofHeight;
+  let ascii = "";
+
+  // Roof
+  for (let i = 0; i < roofHeight; i++) {
+    const spaces = " ".repeat(roofHeight - i - 1);
+    const roofLine = "/".padEnd(roofHeight - i, " ") + "^".repeat(width - 2 * (roofHeight - i - 1)) + "\\".padStart(roofHeight - i, " ");
+    ascii += spaces + roofLine + "\n";
+  }
+
+  // Walls
+  for (let i = 0; i < wallsHeight; i++) {
+    if (i === Math.floor(wallsHeight / 2)) {
+      // Add a door in the middle
+      const doorPosition = Math.floor(width / 2) - 1;
+      ascii += "|" + "-".repeat(doorPosition) + "[D]" + "-".repeat(width - doorPosition - 3) + "|\n";
+    } else {
+      ascii += "|" + "-".repeat(width) + "|\n";
+    }
+  }
+
+  // Base
+  ascii += "+" + "-".repeat(width) + "+";
+  return ascii;
 }
