@@ -1,20 +1,34 @@
 document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const address = document.getElementById("address").value;
-  const images = Array.from(document.getElementById("images").files).map(file =>
-    fileToBase64(file)
-  );
+  const photos = {
+    north: Array.from(document.getElementById("northPhotos").files).map(file => fileToBase64(file)),
+    south: Array.from(document.getElementById("southPhotos").files).map(file => fileToBase64(file)),
+    east: Array.from(document.getElementById("eastPhotos").files).map(file => fileToBase64(file)),
+    west: Array.from(document.getElementById("westPhotos").files).map(file => fileToBase64(file)),
+  };
   const windowCount = document.getElementById("windowCount").value || null;
   const doorCount = document.getElementById("doorCount").value || null;
 
+  const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0);
+  console.log(`Sending request with ${totalImages} images:`, Object.keys(photos).map(dir => `${dir}: ${photos[dir].length}`).join(", "));
+
   try {
     document.getElementById("results").innerHTML = "<p>Loading...</p>";
-    console.log("Sending request to /.netlify/functions/remodel with data:", { address, images: images.length, windowCount, doorCount });
+
+    const resolvedPhotos = {
+      north: await Promise.all(photos.north),
+      south: await Promise.all(photos.south),
+      east: await Promise.all(photos.east),
+      west: await Promise.all(photos.west),
+    };
+
+    console.log("Sending request to /.netlify/functions/remodel with data:", { address, photos: resolvedPhotos, windowCount, doorCount });
     const response = await fetch("/.netlify/functions/remodel", {
       method: "POST",
       body: JSON.stringify({
         address,
-        images: await Promise.all(images),
+        photos: resolvedPhotos,
         windowCount,
         doorCount,
       }),
@@ -37,6 +51,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     if (result.error) throw new Error(result.error);
 
     // Extract data with fallbacks
+    const remodelId = result.remodelId || "unknown";
     const addressDisplay = result.addressData?.display_name || "Unknown Address";
     const measurements = result.measurements || { width: "N/A", length: "N/A", area: "N/A" };
     const isMeasurementsReliable = result.isMeasurementsReliable || false;
@@ -46,7 +61,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const costEstimates = result.costEstimates || { totalCost: "N/A", costBreakdown: ["No cost breakdown available"] };
     const timelineEstimate = result.timelineEstimate || "N/A";
     const roofInfo = result.roofInfo || { pitch: "N/A", height: "N/A", roofArea: "N/A", roofMaterial: "N/A" };
-    const processedImage = result.processedImage || null;
+    const processedImages = result.processedImages || {};
     const satelliteImage = result.satelliteImage || null;
     const satelliteImageError = result.satelliteImageError || null;
     const lat = result.addressData?.lat || 0;
@@ -103,25 +118,28 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       <p><a href="https://www.in.gov/dhs/building-construction/permits/" target="_blank" style="color: #2196F3; text-decoration: none;">Learn More About Indiana Permits</a></p>
     `;
 
-    // Uploaded Image
-    if (processedImage) {
-      resultsHtml += `
-        <h3 style="color: #555;">Uploaded Image</h3>
-        <div style="text-align: center;">
-          <img src="${processedImage}" alt="Uploaded House Image" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-        </div>
-      `;
+    // Uploaded Images by Direction
+    const directions = ["north", "south", "east", "west"];
+    for (const direction of directions) {
+      if (processedImages[direction]) {
+        resultsHtml += `
+          <h3 style="color: #555;">${direction.charAt(0).toUpperCase() + direction.slice(1)}-Facing Image</h3>
+          <div style="text-align: center;">
+            <img src="${processedImages[direction]}" alt="${direction} House Image" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+          </div>
+        `;
+      }
     }
 
     // Note About Multiple Images
-    if (images.length > 0) {
-      if (windowDoorCount.windows === 0 && windowDoorCount.doors === 0 && images.length > 0) {
+    if (totalImages > 0) {
+      if (windowDoorCount.windows === 0 && windowDoorCount.doors === 0) {
         resultsHtml += `
-          <p style="color: #ff9800; font-size: 0.9em;">Failed to detect windows or doors in ${images.length} image(s). Please upload clear photos of the house exterior.</p>
+          <p style="color: #ff9800; font-size: 0.9em;">Failed to detect windows or doors in ${totalImages} image(s). Please upload clear photos of the house exterior.</p>
         `;
       } else {
         resultsHtml += `
-          <p style="font-style: italic; color: #777; font-size: 0.9em;">Processed ${images.length} image(s) for window and door detection. Up to 5 images are supported.</p>
+          <p style="font-style: italic; color: #777; font-size: 0.9em;">Processed ${totalImages} image(s) for window and door detection. Up to 2 images per direction are supported.</p>
         `;
       }
     }
@@ -149,7 +167,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
               height="200"
               frameborder="0"
               style="border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"
-              src="https://www.google.com/maps/embed/v1/place?key=${googleMapsApiKey}&q=${lat},${lon}¢er=${lat},${lon}&zoom=18"
+              src="https://www.google.com/maps/embed/v1/place?key=${googleMapsApiKey}&q=${lat},${lon}&center=${lat},${lon}&zoom=18"
               allowfullscreen>
             </iframe>
             <p style="font-size: 0.9em; margin-top: 5px;">
@@ -173,14 +191,14 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       }
     }
 
-    // Contact Us Button
-    const smsMessage = `I'd like more info or a quote for my remodel at ${addressDisplay}. Please contact me!`;
+    // Contact Us Button with Detailed Info
+    const smsSummary = `Remodel at ${addressDisplay}: ${measurements.area}sqft, ${windowDoorCount.windows} windows, ${windowDoorCount.doors} doors, ~$${costEstimates.totalCost}. Details: https://indyhomeimprovements.com/remodel-details/${remodelId}`;
     resultsHtml += `
       <h3 style="color: #555;">Next Steps with Indy Home Improvements</h3>
       <p>Ready to discuss your project? Contact us directly to request more info or a detailed quote.</p>
       <p style="font-size: 0.9em; color: #777;">By clicking below, you agree to send an SMS to Indy Home Improvements at 765-366-3344. Standard messaging rates may apply. We will not share your phone number. Reply STOP to opt out.</p>
       <div style="text-align: center; margin-top: 10px;">
-        <a href="sms:7653663344?body=${encodeURIComponent(smsMessage)}" style="display: inline-block; padding: 12px 24px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Contact Us</a>
+        <a href="sms:7653663344?body=${encodeURIComponent(smsSummary)}" style="display: inline-block; padding: 12px 24px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">Contact Us</a>
       </div>
       </div>
     `;
@@ -197,17 +215,21 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   }
 });
 
-document.getElementById("images").addEventListener("change", (e) => {
-  const preview = document.getElementById("imagePreview");
-  preview.innerHTML = "";
-  const files = Array.from(e.target.files);
-  console.log(`Selected ${files.length} files for upload`);
-  files.forEach(file => {
-    const img = document.createElement("img");
-    img.src = URL.createObjectURL(file);
-    img.style.maxWidth = "150px";
-    img.style.margin = "5px";
-    preview.appendChild(img);
+// Add preview for each direction
+const directions = ["north", "south", "east", "west"];
+directions.forEach(direction => {
+  document.getElementById(`${direction}Photos`).addEventListener("change", (e) => {
+    const preview = document.getElementById(`${direction}Preview`);
+    preview.innerHTML = "";
+    const files = Array.from(e.target.files);
+    console.log(`Selected ${files.length} files for ${direction} direction`);
+    files.forEach(file => {
+      const img = document.createElement("img");
+      img.src = URL.createObjectURL(file);
+      img.style.maxWidth = "150px";
+      img.style.margin = "5px";
+      preview.appendChild(img);
+    });
   });
 });
 
