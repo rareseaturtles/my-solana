@@ -35,7 +35,7 @@ exports.handler = async (event) => {
       throw new Error("Missing address in request body");
     }
 
-    console.log(`Processing remodel for address: ${address}, number of images: ${images?.length || 0}`);
+    console.log(`Processing remodel for address: ${address}, number of images received: ${images?.length || 0}`);
 
     const addressResponse = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
@@ -54,9 +54,10 @@ exports.handler = async (event) => {
     const buildingData = await getBuildingData(lat, lon);
     const measurements = buildingData.measurements;
     const roofInfo = buildingData.roofInfo;
+    const isMeasurementsReliable = buildingData.isReliable;
 
     const windowDoorInfo = windowCount && doorCount
-      ? { windows: parseInt(windowCount), doors: parseInt(doorCount), windowSizes: [], doorSizes: [], image: null }
+      ? { windows: parseInt(windowCount), doors: parseInt(doorCount), windowSizes: [], doorSizes: [], image: null, isReliable: true }
       : await analyzePhotos(images || []);
 
     const windowDoorCount = {
@@ -64,6 +65,7 @@ exports.handler = async (event) => {
       doors: windowDoorInfo.doors,
       windowSizes: windowDoorInfo.windowSizes,
       doorSizes: windowDoorInfo.doorSizes,
+      isReliable: windowDoorInfo.isReliable,
     };
     const processedImage = windowDoorInfo.image;
     console.log("Processed image included in response:", !!processedImage);
@@ -115,6 +117,7 @@ exports.handler = async (event) => {
         remodelId: docRef.id,
         addressData: addressData[0],
         measurements,
+        isMeasurementsReliable,
         windowDoorCount,
         materialEstimates,
         costEstimates,
@@ -149,19 +152,25 @@ async function getBuildingData(lat, lon) {
   );
   const overpassData = await overpassResponse.json();
 
+  let isReliable = true;
+
   if (!overpassData.elements.length) {
     console.log("No building found, using fallback dimensions");
+    isReliable = false;
     return {
       measurements: { width: 50, length: 30, area: 1500 },
       roofInfo: { pitch: "6/12", height: 20, roofArea: 1650, roofMaterial: "Asphalt Shingles" },
+      isReliable,
     };
   }
 
   const building = overpassData.elements.find(elem => elem.type === "way");
   if (!building) {
+    isReliable = false;
     return {
       measurements: { width: 50, length: 30, area: 1500 },
       roofInfo: { pitch: "6/12", height: 20, roofArea: 1650, roofMaterial: "Asphalt Shingles" },
+      isReliable,
     };
   }
 
@@ -193,6 +202,7 @@ async function getBuildingData(lat, lon) {
   return {
     measurements: { width, length, area },
     roofInfo: { pitch, height: Math.round(totalHeight), roofArea: Math.round(roofArea), roofMaterial },
+    isReliable,
   };
 }
 
@@ -200,8 +210,10 @@ async function analyzePhotos(images) {
   console.log("Analyzing photos for windows and doors...");
   if (!images || images.length === 0) {
     console.log("No images provided, using default counts");
-    return { windows: 0, doors: 0, windowSizes: [], doorSizes: [], image: null };
+    return { windows: 0, doors: 0, windowSizes: [], doorSizes: [], image: null, isReliable: false };
   }
+
+  console.log(`Received ${images.length} images for processing`);
 
   const CLARIFAI_API_KEY = process.env.CLARIFAI_API_KEY;
   if (!CLARIFAI_API_KEY) {
@@ -212,6 +224,7 @@ async function analyzePhotos(images) {
       windowSizes: Array(images.length * 4).fill("3ft x 4ft"),
       doorSizes: Array(images.length * 2).fill("3ft x 7ft"),
       image: null,
+      isReliable: false,
     };
   }
 
@@ -221,15 +234,17 @@ async function analyzePhotos(images) {
     let windowSizes = [];
     let doorSizes = [];
     let firstValidImage = null;
+    let isReliable = false;
 
-    const photosToProcess = images.slice(0, 1);
-    console.log(`Processing ${photosToProcess.length} photo (limited to 1 for free-tier)`);
+    // Process up to 5 images
+    const photosToProcess = images.slice(0, 5);
+    console.log(`Processing ${photosToProcess.length} photos (capped at 5)`);
 
     for (const [index, image] of photosToProcess.entries()) {
-      console.log(`Processing photo ${index + 1}/${photosToProcess.length}`);
+      console.log(`Processing photo ${index + 1}/${photosToProcess.length}, image data length: ${image.length}`);
 
       if (typeof image !== "string" || !image.startsWith("data:image/")) {
-        console.error(`Invalid image data for photo ${index + 1}, skipping:`, image);
+        console.error(`Invalid image data for photo ${index + 1}, skipping:`, image.substring(0, 50));
         continue;
       }
 
@@ -277,6 +292,7 @@ async function analyzePhotos(images) {
         continue;
       }
 
+      isReliable = true;
       data.outputs[0].data.concepts.forEach(concept => {
         if (concept.name.toLowerCase().includes("window")) {
           windowCount++;
@@ -289,15 +305,17 @@ async function analyzePhotos(images) {
           doorSizes.push(size);
         }
       });
+      console.log(`Photo ${index + 1} processed: ${windowCount} windows, ${doorCount} doors detected so far`);
     }
 
-    console.log(`Detected ${windowCount} windows and ${doorCount} doors`);
+    console.log(`Total detected: ${windowCount} windows and ${doorCount} doors`);
     return {
       windows: windowCount,
       doors: doorCount,
       windowSizes,
       doorSizes,
       image: firstValidImage,
+      isReliable,
     };
   } catch (error) {
     console.error("Error analyzing photos:", error.message, error.stack);
@@ -307,6 +325,7 @@ async function analyzePhotos(images) {
       windowSizes: Array(images.length * 4).fill("3ft x 4ft"),
       doorSizes: Array(images.length * 2).fill("3ft x 7ft"),
       image: null,
+      isReliable: false,
     };
   }
 }
@@ -339,12 +358,12 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area) {
   materialEstimates.forEach(item => {
     if (item.includes("Siding")) {
       const sidingArea = parseInt(item.match(/\d+/)[0]);
-      const cost = sidingArea * 5; // $5 per sq ft
+      const cost = sidingArea * 5;
       totalCost += cost;
       costBreakdown.push(`Siding: $${cost} (${sidingArea} sq ft at $5/sq ft)`);
     } else if (item.includes("Exterior Paint")) {
       const gallons = parseInt(item.match(/\d+/)[0]);
-      const cost = gallons * 40; // $40 per gallon
+      const cost = gallons * 40;
       totalCost += cost;
       costBreakdown.push(`Exterior Paint: $${cost} (${gallons} gallons at $40/gallon)`);
     } else if (item.includes("Window")) {
@@ -359,13 +378,13 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area) {
       costBreakdown.push(`${item}: $${cost}`);
     } else if (item.includes("Roofing")) {
       const roofArea = parseInt(item.match(/\d+/)[0]);
-      const cost = roofArea * 4; // $4 per sq ft for asphalt shingles
+      const cost = roofArea * 4;
       totalCost += cost;
       costBreakdown.push(`Roofing: $${cost} (${roofArea} sq ft at $4/sq ft)`);
     }
   });
 
-  const laborCost = area * 50; // $50 per sq ft of house area
+  const laborCost = area * 50;
   totalCost += laborCost;
   costBreakdown.push(`Labor: $${laborCost} (estimated at $50/sq ft for ${area} sq ft)`);
 
