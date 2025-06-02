@@ -48,6 +48,9 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       const results = [];
       for (const file of directionFiles) {
         try {
+          if (file.size > 500 * 1024) { // 500KB limit
+            throw new Error(`Image ${file.name} exceeds 500KB. Please upload a smaller image.`);
+          }
           const base64 = await fileToBase64(file);
           results.push(base64);
         } catch (error) {
@@ -301,6 +304,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
 const directions = ["north", "south", "east", "west"];
 directions.forEach(direction => {
+  // File input change handler
   document.getElementById(`${direction}Photos`).addEventListener("change", (e) => {
     const preview = document.getElementById(`${direction}Preview`);
     preview.innerHTML = "";
@@ -320,6 +324,100 @@ directions.forEach(direction => {
       img.alt = `${direction} preview image`;
       preview.appendChild(img);
     });
+  });
+
+  // Camera capture handler
+  document.getElementById(`capture${direction.charAt(0).toUpperCase() + direction.slice(1)}`).addEventListener("click", async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      const video = document.createElement("video");
+      video.srcObject = stream;
+      video.play();
+
+      const modal = document.createElement("div");
+      modal.style.position = "fixed";
+      modal.style.top = "0";
+      modal.style.left = "0";
+      modal.style.width = "100%";
+      modal.style.height = "100%";
+      modal.style.background = "rgba(0, 0, 0, 0.8)";
+      modal.style.display = "flex";
+      modal.style.justifyContent = "center";
+      modal.style.alignItems = "center";
+      modal.style.zIndex = "1000";
+
+      const container = document.createElement("div");
+      container.style.background = "white";
+      container.style.padding = "20px";
+      container.style.borderRadius = "8px";
+      container.style.textAlign = "center";
+
+      video.style.maxWidth = "100%";
+      video.style.borderRadius = "4px";
+      container.appendChild(video);
+
+      const captureButton = document.createElement("button");
+      captureButton.innerText = "Capture Photo";
+      captureButton.style.marginTop = "10px";
+      captureButton.style.padding = "10px 20px";
+      captureButton.style.backgroundColor = "#e67e22";
+      captureButton.style.color = "white";
+      captureButton.style.border = "none";
+      captureButton.style.borderRadius = "4px";
+      captureButton.style.cursor = "pointer";
+      container.appendChild(captureButton);
+
+      const cancelButton = document.createElement("button");
+      cancelButton.innerText = "Cancel";
+      cancelButton.style.marginTop = "10px";
+      cancelButton.style.marginLeft = "10px";
+      cancelButton.style.padding = "10px 20px";
+      cancelButton.style.backgroundColor = "#d32f2f";
+      cancelButton.style.color = "white";
+      cancelButton.style.border = "none";
+      cancelButton.style.borderRadius = "4px";
+      cancelButton.style.cursor = "pointer";
+      container.appendChild(cancelButton);
+
+      modal.appendChild(container);
+      document.body.appendChild(modal);
+
+      captureButton.addEventListener("click", () => {
+        const canvas = document.createElement("canvas");
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg");
+
+        const file = dataURLtoFile(dataUrl, `${direction}_photo.jpg`);
+        const fileList = new DataTransfer();
+        fileList.items.add(file);
+        document.getElementById(`${direction}Photos`).files = fileList.files;
+
+        const preview = document.getElementById(`${direction}Preview`);
+        preview.innerHTML = "";
+        const img = document.createElement("img");
+        img.src = dataUrl;
+        img.style.maxWidth = "150px";
+        img.style.borderRadius = "4px";
+        img.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
+        img.style.margin = "5px";
+        img.alt = `${direction} captured image`;
+        preview.appendChild(img);
+
+        stream.getTracks().forEach(track => track.stop());
+        modal.remove();
+      });
+
+      cancelButton.addEventListener("click", () => {
+        stream.getTracks().forEach(track => track.stop());
+        modal.remove();
+      });
+    } catch (error) {
+      console.error(`Error accessing camera for ${direction}:`, error);
+      displayError(`Failed to access camera: ${error.message}. Please upload an image instead.`);
+    }
   });
 });
 
@@ -344,6 +442,18 @@ function fileToBase64(file) {
     };
     reader.readAsDataURL(file);
   });
+}
+
+function dataURLtoFile(dataUrl, filename) {
+  const arr = dataUrl.split(",");
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) {
+    u8arr[n] = bstr.charCodeAt(n);
+  }
+  return new File([u8arr], filename, { type: mime });
 }
 
 function displayError(message) {
