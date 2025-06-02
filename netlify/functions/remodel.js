@@ -7,14 +7,19 @@ exports.handler = async (event) => {
   try {
     if (!admin.apps.length) {
       console.log("Initializing Firebase Admin...");
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: "turtle-treasure-giveaway",
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-        }),
-      });
-      console.log("Firebase Admin initialized successfully in remodel");
+      try {
+        admin.initializeApp({
+          credential: admin.credential.cert({
+            projectId: "turtle-treasure-giveaway",
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+          }),
+        });
+        console.log("Firebase Admin initialized successfully in remodel");
+      } catch (initError) {
+        console.error("Firebase Admin initialization failed:", initError.message);
+        throw new Error("Failed to initialize Firebase: " + initError.message);
+      }
     }
 
     const db = admin.firestore();
@@ -29,6 +34,7 @@ exports.handler = async (event) => {
     try {
       body = JSON.parse(event.body);
     } catch (parseError) {
+      console.error("Failed to parse request body:", parseError.message);
       throw new Error("Invalid request body: Failed to parse JSON");
     }
 
@@ -60,6 +66,11 @@ exports.handler = async (event) => {
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
       { headers: { "User-Agent": "IndyHomeImprovements/1.0" } }
     );
+    if (!addressResponse.ok) {
+      const errorText = await addressResponse.text();
+      console.error("Address validation failed:", errorText);
+      throw new Error("Failed to validate address: " + errorText);
+    }
     const addressData = await addressResponse.json();
 
     if (!addressData.length) {
@@ -210,6 +221,7 @@ async function getStreetViewImages(lat, lon, apiKey) {
       return { images: {}, status: "unavailable", roofPitchStatus: "unavailable" };
     }
   } catch (error) {
+    console.error("Error fetching Street View metadata:", error.message);
     return { images: {}, status: "metadata_error", roofPitchStatus: "metadata_error" };
   }
 
@@ -262,6 +274,10 @@ async function getBuildingData(lat, lon) {
   const overpassResponse = await fetch(
     `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`
   );
+  if (!overpassResponse.ok) {
+    console.error("Overpass API request failed:", overpassResponse.status);
+    throw new Error("Failed to fetch building data from Overpass API");
+  }
   const overpassData = await overpassResponse.json();
 
   let isReliable = true;
@@ -332,7 +348,6 @@ async function estimateRoofPitchFromImage(base64Image, source) {
   let isPitchReliable = false;
   let pitchSource = "default";
 
-  // Try Google Cloud Vision API
   if (GOOGLE_VISION_API_KEY) {
     try {
       const visionResponse = await fetch(
@@ -374,7 +389,6 @@ async function estimateRoofPitchFromImage(base64Image, source) {
     }
   }
 
-  // Fallback to Clarifai
   if (CLARIFAI_API_KEY) {
     try {
       const clarifaiResponse = await fetch(
@@ -546,7 +560,6 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
     console.log(`Processing ${images.length} user photos for ${direction} direction`);
     allUploadedImages[direction] = [];
 
-    // Store all images in Firebase Storage
     for (const [index, image] of images.entries()) {
       try {
         if (!image || typeof image !== "string" || !image.startsWith("data:image/")) {
@@ -563,10 +576,15 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
         const imageBuffer = Buffer.from(base64Image, "base64");
         const fileName = `remodels/${Date.now()}_${direction}_${index}.jpg`;
         const file = bucket.file(fileName);
-        await file.save(imageBuffer, {
-          metadata: { contentType: "image/jpeg" },
-        });
-        console.log(`Image uploaded to Firebase Storage: ${fileName}`);
+        try {
+          await file.save(imageBuffer, {
+            metadata: { contentType: "image/jpeg" },
+          });
+          console.log(`Image uploaded to Firebase Storage: ${fileName}`);
+        } catch (storageError) {
+          console.error(`Error uploading ${direction} photo ${index + 1} to Firebase Storage:`, storageError.message);
+          continue;
+        }
 
         const [url] = await file.getSignedUrl({
           action: "read",
@@ -579,12 +597,11 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
           continue;
         }
       } catch (error) {
-        console.error(`Error uploading ${direction} photo ${index + 1}:`, error.message);
+        console.error(`Error processing ${direction} photo ${index + 1}:`, error.message);
         continue;
       }
     }
 
-    // Process only the first image for analysis
     const photosToProcess = images.slice(0, 1);
     for (const [index, image] of photosToProcess.entries()) {
       try {
@@ -616,25 +633,36 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         console.log(`Making Clarifai API call for ${direction} photo ${index + 1}`);
-        const response = await fetch(
-          "https://api.clarifai.com/v2/models/general-image-recognition/outputs",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Key ${CLARIFAI_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              inputs: [{ data: { image: { base64: base64Image } } }],
-            }),
-            signal: controller.signal,
-          }
-        );
-
-        clearTimeout(timeoutId);
+        let response;
+        try {
+          response = await fetch(
+            "https://api.clarifai.com/v2/models/general-image-recognition/outputs",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Key ${CLARIFAI_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                inputs: [{ data: { image: { base64: base64Image } } }],
+              }),
+              signal: controller.signal,
+            }
+          );
+        } catch (fetchError) {
+          console.error(`Clarifai API fetch failed for ${direction} photo ${index + 1}:`, fetchError.message);
+          windowCount += 2;
+          doorCount += 1;
+          windowSizes.push("3ft x 4ft", "3ft x 4ft");
+          doorSizes.push("3ft x 7ft");
+          continue;
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
         if (!response.ok) {
-          console.error(`Clarifai API error for ${direction} photo ${index + 1}: ${response.status}`);
+          const errorText = await response.text();
+          console.error(`Clarifai API error for ${direction} photo ${index + 1}: ${response.status} - ${errorText}`);
           windowCount += 2;
           doorCount += 1;
           windowSizes.push("3ft x 4ft", "3ft x 4ft");
@@ -654,7 +682,7 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
 
         isReliable = true;
         data.outputs[0].data.concepts.forEach(concept => {
-          if (concept.name.toLowerCase().includes("window") && concept.value > 0.5) { // Lowered threshold
+          if (concept.name.toLowerCase().includes("window") && concept.value > 0.5) {
             windowCount++;
             const size = concept.value > 0.7 ? "4ft x 5ft" : "3ft x 4ft";
             windowSizes.push(size);
@@ -694,25 +722,36 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
         const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         console.log(`Making Clarifai API call for ${direction} Street View`);
-        const clarifaiResponse = await fetch(
-          "https://api.clarifai.com/v2/models/general-image-recognition/outputs",
-          {
-            method: "POST",
-            headers: {
-              Authorization: `Key ${CLARIFAI_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              inputs: [{ data: { image: { base64: base64Image } } }],
-            }),
-            signal: controller.signal,
-          }
-        );
-
-        clearTimeout(timeoutId);
+        let clarifaiResponse;
+        try {
+          clarifaiResponse = await fetch(
+            "https://api.clarifai.com/v2/models/general-image-recognition/outputs",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Key ${CLARIFAI_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                inputs: [{ data: { image: { base64: base64Image } } }],
+              }),
+              signal: controller.signal,
+            }
+          );
+        } catch (fetchError) {
+          console.error(`Clarifai API fetch failed for ${direction} Street View:`, fetchError.message);
+          windowCount += 2;
+          doorCount += 1;
+          windowSizes.push("3ft x 4ft", "3ft x 4ft");
+          doorSizes.push("3ft x 7ft");
+          continue;
+        } finally {
+          clearTimeout(timeoutId);
+        }
 
         if (!clarifaiResponse.ok) {
-          console.error(`Clarifai API error for ${direction} Street View:`, clarifaiResponse.status);
+          const errorText = await clarifaiResponse.text();
+          console.error(`Clarifai API error for ${direction} Street View: ${clarifaiResponse.status} - ${errorText}`);
           windowCount += 2;
           doorCount += 1;
           windowSizes.push("3ft x 4ft", "3ft x 4ft");
