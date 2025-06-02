@@ -21,7 +21,6 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     return;
   }
 
-  // Debug: Log raw file inputs
   console.log("Raw photo inputs:", {
     north: photos.north.map(file => file.name),
     south: photos.south.map(file => file.name),
@@ -32,7 +31,6 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0);
   console.log(`Total images selected: ${totalImages}`);
 
-  // Warn if more than one image per direction
   const directions = ["north", "south", "east", "west"];
   for (const direction of directions) {
     if (photos[direction].length > 1) {
@@ -40,7 +38,6 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     }
   }
 
-  // Convert files to base64 with enhanced error handling
   let resolvedPhotos;
   try {
     const timeoutPromise = new Promise((_, reject) => {
@@ -54,6 +51,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
           const base64 = await fileToBase64(file);
           results.push(base64);
         } catch (error) {
+          console.error(`Error converting ${direction} photo: ${error.message}`);
           throw new Error(`${direction.charAt(0).toUpperCase() + direction.slice(1)} photo: ${error.message}`);
         }
       }
@@ -132,7 +130,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const lat = result.addressData?.lat || 0;
     const lon = result.addressData?.lon || 0;
 
-    const isCostReliable = isMeasurementsReliable || isWindowDoorCountReliable; // Relaxed condition
+    const isCostReliable = isMeasurementsReliable || isWindowDoorCountReliable;
 
     let resultsHtml = `
       <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem;" role="region" aria-label="Remodel Estimate Results">
@@ -359,7 +357,6 @@ function displayError(message) {
 
 function displayWarning(message) {
   console.log("Warning:", message);
-  // Optionally display to user (e.g., via a temporary banner)
   const resultsDiv = document.getElementById("results");
   if (resultsDiv.innerHTML === "") {
     resultsDiv.innerHTML = `
