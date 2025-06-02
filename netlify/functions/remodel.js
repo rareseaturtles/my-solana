@@ -38,7 +38,7 @@ exports.handler = async (event) => {
       throw new Error("Invalid request body: Failed to parse JSON");
     }
 
-    const { address, photos, windowCount, doorCount } = body;
+    const { address, photos, retryPhotos, windowCount, doorCount, windowSizes, doorSizes } = body;
 
     if (!address) {
       throw new Error("Missing address in request body");
@@ -55,12 +55,19 @@ exports.handler = async (event) => {
         console.error(`Photos for ${direction} is not an array:`, photos[direction]);
         throw new Error(`Invalid photos data for ${direction}: Expected an array`);
       }
+      if (retryPhotos && retryPhotos[direction] && !Array.isArray(retryPhotos[direction])) {
+        console.error(`Retry photos for ${direction} is not an array:`, retryPhotos[direction]);
+        throw new Error(`Invalid retry photos data for ${direction}: Expected an array`);
+      }
     }
 
     const allImages = directions
       .flatMap(direction => photos[direction] || [])
       .filter(image => image && typeof image === "string" && image.startsWith("data:image/"));
-    console.log(`Processing remodel for address: ${address}, total user images received: ${allImages.length}`);
+    const allRetryImages = directions
+      .flatMap(direction => (retryPhotos && retryPhotos[direction]) || [])
+      .filter(image => image && typeof image === "string" && image.startsWith("data:image/"));
+    console.log(`Processing remodel for address: ${address}, total user images received: ${allImages.length}, total retry images received: ${allRetryImages.length}`);
 
     const addressResponse = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
@@ -86,7 +93,7 @@ exports.handler = async (event) => {
 
     const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
     let streetViewData = { images: {}, status: "not_used", roofPitchStatus: "not_attempted" };
-    if (allImages.length === 0) {
+    if (allImages.length === 0 && allRetryImages.length === 0) {
       streetViewData = await getStreetViewImages(lat, lon, GOOGLE_MAPS_API_KEY);
     }
 
@@ -95,21 +102,39 @@ exports.handler = async (event) => {
     const isMeasurementsReliable = buildingData.isReliable;
 
     let windowDoorInfo;
-    if (windowCount && doorCount) {
-      const windows = parseInt(windowCount, 10) || 0;
-      const doors = parseInt(doorCount, 10) || 0;
+    if (windowCount !== null && doorCount !== null && windowSizes && doorSizes) {
       windowDoorInfo = {
-        windows,
-        doors,
-        windowSizes: Array(windows).fill("3ft x 4ft"),
-        doorSizes: Array(doors).fill("3ft x 7ft"),
+        windows: windowCount,
+        doors: doorCount,
+        windowSizes: windowSizes,
+        doorSizes: doorSizes,
         images: {},
         isReliable: true,
       };
-      console.log(`Using manual window/door counts: ${windowDoorInfo.windows} windows, ${windowDoorInfo.doors} doors`);
+      console.log(`Using manual window/door counts and sizes: ${windowDoorInfo.windows} windows, ${windowDoorInfo.doors} doors`);
     } else {
-      windowDoorInfo = await analyzePhotos(photos, streetViewData.images, bucket);
+      windowDoorInfo = await analyzePhotos(photos, retryPhotos, streetViewData.images, bucket);
       windowDoorInfo.streetViewStatus = streetViewData.status;
+
+      const retryDirections = windowDoorInfo.retryDirections || [];
+      if (retryDirections.length > 0) {
+        return {
+          statusCode: 200,
+          body: JSON.stringify({ retryDirections }),
+        };
+      }
+
+      // If AI detection fails and no manual sizes are provided, require manual input
+      if (!windowDoorInfo.isReliable && (!windowSizes || !doorSizes)) {
+        throw new Error("Failed to detect windows or doors, and no manual sizes provided. Please provide manual counts and sizes.");
+      }
+
+      // Use manual sizes if provided, even if AI detection succeeded
+      if (windowSizes && doorSizes) {
+        windowDoorInfo.windowSizes = windowSizes;
+        windowDoorInfo.doorSizes = doorSizes;
+        windowDoorInfo.isReliable = true;
+      }
     }
 
     const windowDoorCount = {
@@ -185,7 +210,7 @@ exports.handler = async (event) => {
         allUploadedImages,
         satelliteImage,
         satelliteImageError,
-        usedStreetView: allImages.length === 0 && Object.keys(processedImages).length > 0,
+        usedStreetView: (allImages.length + allRetryImages.length) === 0 && Object.keys(processedImages).length > 0,
         streetViewStatus: windowDoorInfo.streetViewStatus,
         streetViewRoofPitchStatus: streetViewData.roofPitchStatus,
       }),
@@ -525,26 +550,14 @@ async function getRoofInfo(lat, lon, baseRoofInfo, userPhotos, streetViewImages,
   return { pitch, height, roofArea: Math.round(roofArea), roofMaterial, isPitchReliable, pitchSource, streetViewRoofPitchStatus };
 }
 
-async function analyzePhotos(photos, streetViewImages, bucket) {
+async function analyzePhotos(photos, retryPhotos, streetViewImages, bucket) {
   console.log("Analyzing photos for windows and doors...");
   const directions = ["north", "south", "east", "west"];
   const allImages = directions.flatMap(direction => photos[direction] || []);
-  console.log(`Received ${allImages.length} user images and ${Object.keys(streetViewImages).length} Street View images`);
+  const allRetryImages = directions.flatMap(direction => (retryPhotos && retryPhotos[direction]) || []);
+  console.log(`Received ${allImages.length} user images, ${allRetryImages.length} retry images, and ${Object.keys(streetViewImages).length} Street View images`);
 
   const CLARIFAI_API_KEY = process.env.CLARIFAI_API_KEY;
-  if (!CLARIFAI_API_KEY) {
-    console.error("Clarifai API key missing, using fallback");
-    return {
-      windows: (allImages.length + Object.keys(streetViewImages).length) * 2,
-      doors: (allImages.length + Object.keys(streetViewImages).length) * 1,
-      windowSizes: Array((allImages.length + Object.keys(streetViewImages).length) * 2).fill("3ft x 4ft"),
-      doorSizes: Array((allImages.length + Object.keys(streetViewImages).length) * 1).fill("3ft x 7ft"),
-      images: streetViewImages,
-      allUploadedImages: {},
-      isReliable: false,
-    };
-  }
-
   let windowCount = 0;
   let doorCount = 0;
   let windowSizes = [];
@@ -552,13 +565,136 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
   const processedImages = { ...streetViewImages };
   const allUploadedImages = {};
   let isReliable = false;
+  const retryDirections = [];
 
+  // First, try retry photos if provided
+  for (const direction of directions) {
+    const retryImages = (retryPhotos && retryPhotos[direction]) || [];
+    if (retryImages.length === 0) continue;
+
+    console.log(`Processing ${retryImages.length} retry photos for ${direction} direction`);
+    allUploadedImages[direction] = allUploadedImages[direction] || [];
+
+    for (const [index, image] of retryImages.entries()) {
+      try {
+        if (!image || typeof image !== "string" || !image.startsWith("data:image/")) {
+          console.error(`Invalid retry image data for ${direction} photo ${index + 1}:`, image?.substring(0, 50));
+          continue;
+        }
+
+        const base64Image = image.split(",")[1];
+        if (!base64Image) {
+          console.error(`Failed to extract base64 data from ${direction} retry photo ${index + 1}`);
+          continue;
+        }
+
+        const imageBuffer = Buffer.from(base64Image, "base64");
+        const fileName = `remodels/${Date.now()}_${direction}_retry_${index}.jpg`;
+        const file = bucket.file(fileName);
+        try {
+          await file.save(imageBuffer, {
+            metadata: { contentType: "image/jpeg" },
+          });
+          console.log(`Retry image uploaded to Firebase Storage: ${fileName}`);
+        } catch (storageError) {
+          console.error(`Error uploading ${direction} retry photo ${index + 1} to Firebase Storage:`, storageError.message);
+          continue;
+        }
+
+        const [url] = await file.getSignedUrl({
+          action: "read",
+          expires: "03-09-2500",
+        });
+        if (url && typeof url === "string" && url.startsWith("https://")) {
+          allUploadedImages[direction].push(url);
+        } else {
+          console.warn(`Invalid URL generated for ${direction} retry photo ${index + 1}:`, url);
+          continue;
+        }
+
+        if (base64Image.length > 500000) {
+          console.log(`Skipping ${direction} retry photo ${index + 1}: Image too large (${base64Image.length} bytes)`);
+          retryDirections.push(direction);
+          continue;
+        }
+
+        if (!processedImages[direction]) {
+          processedImages[direction] = url;
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        console.log(`Making Clarifai API call for ${direction} retry photo ${index + 1}`);
+        let response;
+        try {
+          response = await fetch(
+            "https://api.clarifai.com/v2/models/general-image-recognition/outputs",
+            {
+              method: "POST",
+              headers: {
+                Authorization: `Key ${CLARIFAI_API_KEY}`,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                inputs: [{ data: { image: { base64: base64Image } } }],
+              }),
+              signal: controller.signal,
+            }
+          );
+        } catch (fetchError) {
+          console.error(`Clarifai API fetch failed for ${direction} retry photo ${index + 1}:`, fetchError.message);
+          retryDirections.push(direction);
+          continue;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`Clarifai API error for ${direction} retry photo ${index + 1}: ${response.status} - ${errorText}`);
+          retryDirections.push(direction);
+          continue;
+        }
+
+        const data = await response.json();
+        if (!data.outputs || !data.outputs[0] || !data.outputs[0].data || !data.outputs[0].data.concepts) {
+          console.error(`Unexpected Clarifai response structure for ${direction} retry photo ${index + 1}:`, JSON.stringify(data));
+          retryDirections.push(direction);
+          continue;
+        }
+
+        isReliable = true;
+        data.outputs[0].data.concepts.forEach(concept => {
+          if (concept.name.toLowerCase().includes("window") && concept.value > 0.5) {
+            windowCount++;
+            const size = concept.value > 0.7 ? "4ft x 5ft" : "3ft x 4ft";
+            windowSizes.push(size);
+            console.log(`Detected window in ${direction} retry photo ${index + 1}, confidence: ${concept.value}`);
+          }
+          if (concept.name.toLowerCase().includes("door") && concept.value > 0.5) {
+            doorCount++;
+            const size = concept.value > 0.7 ? "3ft x 8ft" : "3ft x 7ft";
+            doorSizes.push(size);
+            console.log(`Detected door in ${direction} retry photo ${index + 1}, confidence: ${concept.value}`);
+          }
+        });
+        console.log(`${direction} retry photo ${index + 1} processed: ${windowCount} windows, ${doorCount} doors detected so far`);
+      } catch (error) {
+        console.error(`Error processing ${direction} retry photo ${index + 1}:`, error.message);
+        retryDirections.push(direction);
+        continue;
+      }
+    }
+  }
+
+  // Process original photos
   for (const direction of directions) {
     const images = photos[direction] || [];
     if (images.length === 0) continue;
 
     console.log(`Processing ${images.length} user photos for ${direction} direction`);
-    allUploadedImages[direction] = [];
+    allUploadedImages[direction] = allUploadedImages[direction] || [];
 
     for (const [index, image] of images.entries()) {
       try {
@@ -588,291 +724,4 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
 
         const [url] = await file.getSignedUrl({
           action: "read",
-          expires: "03-09-2500",
-        });
-        if (url && typeof url === "string" && url.startsWith("https://")) {
-          allUploadedImages[direction].push(url);
-        } else {
-          console.warn(`Invalid URL generated for ${direction} photo ${index + 1}:`, url);
-          continue;
-        }
-      } catch (error) {
-        console.error(`Error processing ${direction} photo ${index + 1}:`, error.message);
-        continue;
-      }
-    }
-
-    const photosToProcess = images.slice(0, 1);
-    for (const [index, image] of photosToProcess.entries()) {
-      try {
-        console.log(`Analyzing ${direction} user photo ${index + 1}/${photosToProcess.length}`);
-
-        if (!image || typeof image !== "string" || !image.startsWith("data:image/")) {
-          console.error(`Invalid image data for ${direction} photo ${index + 1}:`, image?.substring(0, 50));
-          continue;
-        }
-
-        const base64Image = image.split(",")[1];
-        if (!base64Image) {
-          console.error(`Failed to extract base64 data from ${direction} photo ${index + 1}`);
-          continue;
-        }
-
-        if (base64Image.length > 500000) {
-          console.log(`Skipping ${direction} photo ${index + 1}: Image too large (${base64Image.length} bytes)`);
-          windowCount += 2;
-          doorCount += 1;
-          windowSizes.push("3ft x 4ft", "3ft x 4ft");
-          doorSizes.push("3ft x 7ft");
-          continue;
-        }
-
-        processedImages[direction] = allUploadedImages[direction][0];
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-        console.log(`Making Clarifai API call for ${direction} photo ${index + 1}`);
-        let response;
-        try {
-          response = await fetch(
-            "https://api.clarifai.com/v2/models/general-image-recognition/outputs",
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Key ${CLARIFAI_API_KEY}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                inputs: [{ data: { image: { base64: base64Image } } }],
-              }),
-              signal: controller.signal,
-            }
-          );
-        } catch (fetchError) {
-          console.error(`Clarifai API fetch failed for ${direction} photo ${index + 1}:`, fetchError.message);
-          windowCount += 2;
-          doorCount += 1;
-          windowSizes.push("3ft x 4ft", "3ft x 4ft");
-          doorSizes.push("3ft x 7ft");
-          continue;
-        } finally {
-          clearTimeout(timeoutId);
-        }
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error(`Clarifai API error for ${direction} photo ${index + 1}: ${response.status} - ${errorText}`);
-          windowCount += 2;
-          doorCount += 1;
-          windowSizes.push("3ft x 4ft", "3ft x 4ft");
-          doorSizes.push("3ft x 7ft");
-          continue;
-        }
-
-        const data = await response.json();
-        if (!data.outputs || !data.outputs[0] || !data.outputs[0].data || !data.outputs[0].data.concepts) {
-          console.error(`Unexpected Clarifai response structure for ${direction} photo ${index + 1}:`, JSON.stringify(data));
-          windowCount += 2;
-          doorCount += 1;
-          windowSizes.push("3ft x 4ft", "3ft x 4ft");
-          doorSizes.push("3ft x 7ft");
-          continue;
-        }
-
-        isReliable = true;
-        data.outputs[0].data.concepts.forEach(concept => {
-          if (concept.name.toLowerCase().includes("window") && concept.value > 0.5) {
-            windowCount++;
-            const size = concept.value > 0.7 ? "4ft x 5ft" : "3ft x 4ft";
-            windowSizes.push(size);
-            console.log(`Detected window in ${direction} photo ${index + 1}, confidence: ${concept.value}`);
-          }
-          if (concept.name.toLowerCase().includes("door") && concept.value > 0.5) {
-            doorCount++;
-            const size = concept.value > 0.7 ? "3ft x 8ft" : "3ft x 7ft";
-            doorSizes.push(size);
-            console.log(`Detected door in ${direction} photo ${index + 1}, confidence: ${concept.value}`);
-          }
-        });
-        console.log(`${direction} photo ${index + 1} processed: ${windowCount} windows, ${doorCount} doors detected so far`);
-      } catch (error) {
-        console.error(`Error processing ${direction} photo ${index + 1}:`, error.message, error.stack);
-        windowCount += 2;
-        doorCount += 1;
-        windowSizes.push("3ft x 4ft", "3ft x 4ft");
-        doorSizes.push("3ft x 7ft");
-        continue;
-      }
-    }
-  }
-
-  if (allImages.length === 0) {
-    for (const direction of directions) {
-      const url = streetViewImages[direction];
-      if (!url) continue;
-
-      try {
-        console.log(`Processing Street View image for ${direction}`);
-        const response = await fetch(url);
-        const imageBuffer = await response.buffer();
-        const base64Image = imageBuffer.toString("base64");
-
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000);
-
-        console.log(`Making Clarifai API call for ${direction} Street View`);
-        let clarifaiResponse;
-        try {
-          clarifaiResponse = await fetch(
-            "https://api.clarifai.com/v2/models/general-image-recognition/outputs",
-            {
-              method: "POST",
-              headers: {
-                Authorization: `Key ${CLARIFAI_API_KEY}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                inputs: [{ data: { image: { base64: base64Image } } }],
-              }),
-              signal: controller.signal,
-            }
-          );
-        } catch (fetchError) {
-          console.error(`Clarifai API fetch failed for ${direction} Street View:`, fetchError.message);
-          windowCount += 2;
-          doorCount += 1;
-          windowSizes.push("3ft x 4ft", "3ft x 4ft");
-          doorSizes.push("3ft x 7ft");
-          continue;
-        } finally {
-          clearTimeout(timeoutId);
-        }
-
-        if (!clarifaiResponse.ok) {
-          const errorText = await clarifaiResponse.text();
-          console.error(`Clarifai API error for ${direction} Street View: ${clarifaiResponse.status} - ${errorText}`);
-          windowCount += 2;
-          doorCount += 1;
-          windowSizes.push("3ft x 4ft", "3ft x 4ft");
-          doorSizes.push("3ft x 7ft");
-          continue;
-        }
-
-        const data = await clarifaiResponse.json();
-        if (!data.outputs || !data.outputs[0] || !data.outputs[0].data || !data.outputs[0].data.concepts) {
-          console.error(`Unexpected Clarifai response for ${direction} Street View`);
-          windowCount += 2;
-          doorCount += 1;
-          windowSizes.push("3ft x 4ft", "3ft x 4ft");
-          doorSizes.push("3ft x 7ft");
-          continue;
-        }
-
-        isReliable = true;
-        data.outputs[0].data.concepts.forEach(concept => {
-          if (concept.name.toLowerCase().includes("window") && concept.value > 0.5) {
-            windowCount++;
-            const size = concept.value > 0.7 ? "4ft x 5ft" : "3ft x 4ft";
-            windowSizes.push(size);
-            console.log(`Detected window in ${direction} Street View, confidence: ${concept.value}`);
-          }
-          if (concept.name.toLowerCase().includes("door") && concept.value > 0.5) {
-            doorCount++;
-            const size = concept.value > 0.7 ? "3ft x 8ft" : "3ft x 7ft";
-            doorSizes.push(size);
-            console.log(`Detected door in ${direction} Street View, confidence: ${concept.value}`);
-          }
-        });
-        console.log(`${direction} Street View processed: ${windowCount} windows, ${doorCount} doors detected so far`);
-      } catch (error) {
-        console.error(`Error processing ${direction} Street View:`, error.message);
-        windowCount += 2;
-        doorCount += 1;
-        windowSizes.push("3ft x 4ft", "3ft x 4ft");
-        doorSizes.push("3ft x 7ft");
-        continue;
-      }
-    }
-  }
-
-  console.log(`Total detected: ${windowCount} windows and ${doorCount} doors`);
-  return {
-    windows: windowCount,
-    doors: doorCount,
-    windowSizes,
-    doorSizes,
-    images: processedImages,
-    allUploadedImages,
-    isReliable,
-  };
-}
-
-function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo) {
-  console.log("Calculating material estimates...");
-  const { area } = measurements;
-  const { windows, doors, windowSizes, doorSizes } = windowDoorCount;
-  const { roofArea, roofMaterial } = roofInfo;
-
-  const sidingArea = area * 1.1;
-  const siding = `Siding: ${Math.round(sidingArea)} sq ft`;
-
-  const paintGallons = Math.ceil((area * 2) / 400);
-  const paint = `Exterior Paint: ${paintGallons} gallons`;
-
-  const windowEstimates = windowSizes.map((size, index) => `Window ${index + 1}: ${size}`);
-  const doorEstimates = doorSizes.map((size, index) => `Door ${index + 1}: ${size}`);
-
-  const roofing = `Roofing (${roofMaterial}): ${Math.round(roofArea)} sq ft`;
-
-  return [siding, paint, ...windowEstimates, ...doorEstimates, roofing];
-}
-
-function calculateCostEstimates(materialEstimates, windowDoorCount, area) {
-  console.log("Calculating cost estimates...");
-  let totalCost = 0;
-  const costBreakdown = [];
-
-  materialEstimates.forEach(item => {
-    if (item.includes("Siding")) {
-      const sidingArea = parseInt(item.match(/\d+/)[0]);
-      const cost = sidingArea * 5;
-      totalCost += cost;
-      costBreakdown.push(`Siding: $${cost} (${sidingArea} sq ft at $5/sq ft)`);
-    } else if (item.includes("Exterior Paint")) {
-      const gallons = parseInt(item.match(/\d+/)[0]);
-      const cost = gallons * 40;
-      totalCost += cost;
-      costBreakdown.push(`Exterior Paint: $${cost} (${gallons} gallons at $40/gallon)`);
-    } else if (item.includes("Window")) {
-      const size = item.match(/\d+ft x \d+ft/)[0];
-      const cost = size === "4ft x 5ft" ? 500 : 300;
-      totalCost += cost;
-      costBreakdown.push(`${item}: $${cost}`);
-    } else if (item.includes("Door")) {
-      const size = item.match(/\d+ft x \d+ft/)[0];
-      const cost = size === "3ft x 8ft" ? 800 : 600;
-      totalCost += cost;
-      costBreakdown.push(`${item}: $${cost}`);
-    } else if (item.includes("Roofing")) {
-      const roofArea = parseInt(item.match(/\d+/)[0]);
-      const cost = roofArea * 4;
-      totalCost += cost;
-      costBreakdown.push(`Roofing: $${cost} (${roofArea} sq ft at $4/sq ft)`);
-    }
-  });
-
-  const laborCost = area * 50;
-  totalCost += laborCost;
-  costBreakdown.push(`Labor: $${laborCost} (estimated at $50/sq ft for ${area} sq ft)`);
-
-  return { totalCost: Math.round(totalCost), costBreakdown };
-}
-
-function calculateTimeline(area, windowDoorCount) {
-  console.log("Calculating timeline estimates...");
-  let weeks = Math.ceil(area / 500);
-  const additionalDays = (windowDoorCount.windows + windowDoorCount.doors);
-  weeks += Math.ceil(additionalDays / 5);
-  return weeks;
-}
+          expires: "03-09-
