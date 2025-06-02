@@ -54,7 +54,7 @@ exports.handler = async (event) => {
     const allImages = directions
       .flatMap(direction => photos[direction] || [])
       .filter(image => image && typeof image === "string" && image.startsWith("data:image/"));
-    console.log(`Processing remodel for address: ${address}, total images received: ${allImages.length}`);
+    console.log(`Processing remodel for address: ${address}, total user images received: ${allImages.length}`);
 
     const addressResponse = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
@@ -75,9 +75,21 @@ exports.handler = async (event) => {
     const roofInfo = buildingData.roofInfo;
     const isMeasurementsReliable = buildingData.isReliable;
 
-    const windowDoorInfo = windowCount && doorCount
-      ? { windows: parseInt(windowCount), doors: parseInt(doorCount), windowSizes: [], doorSizes: [], images: {}, isReliable: true }
-      : await analyzePhotos(photos, bucket);
+    let windowDoorInfo;
+    if (windowCount && doorCount) {
+      windowDoorInfo = {
+        windows: parseInt(windowCount),
+        doors: parseInt(doorCount),
+        windowSizes: [],
+        doorSizes: [],
+        images: {},
+        isReliable: true,
+      };
+    } else {
+      // If no user images, fetch Street View images
+      const streetViewImages = allImages.length === 0 ? await getStreetViewImages(lat, lon, process.env.GOOGLE_MAPS_API_KEY) : {};
+      windowDoorInfo = await analyzePhotos(photos, streetViewImages, bucket);
+    }
 
     const windowDoorCount = {
       windows: windowDoorInfo.windows,
@@ -89,7 +101,7 @@ exports.handler = async (event) => {
     let processedImages = windowDoorInfo.images;
     console.log("Raw processedImages:", JSON.stringify(processedImages, null, 2));
 
-    // Validate processedImages to ensure only string URLs
+    // Validate processedImages
     const validProcessedImages = {};
     for (const [direction, url] of Object.entries(processedImages)) {
       if (typeof url === "string" && url.startsWith("https://")) {
@@ -139,7 +151,7 @@ exports.handler = async (event) => {
       costEstimates,
       timelineEstimate,
       roofInfo,
-      processedImages, // Only valid string URLs
+      processedImages,
       satelliteImage,
       satelliteImageError,
       lat,
@@ -166,6 +178,7 @@ exports.handler = async (event) => {
         processedImages,
         satelliteImage,
         satelliteImageError,
+        usedStreetView: allImages.length === 0 && Object.keys(processedImages).length > 0,
       }),
     };
   } catch (error) {
@@ -176,6 +189,50 @@ exports.handler = async (event) => {
     };
   }
 };
+
+async function getStreetViewImages(lat, lon, apiKey) {
+  console.log("Fetching Street View images...");
+  if (!apiKey) {
+    console.log("Google Maps API key missing, skipping Street View.");
+    return {};
+  }
+
+  const directions = ["north", "south", "east", "west"];
+  const headings = [0, 180, 90, 270]; // Corresponding to north, south, east, west
+  const streetViewImages = {};
+
+  for (let i = 0; i < directions.length; i++) {
+    const direction = directions[i];
+    const heading = headings[i];
+    const url = `https://maps.googleapis.com/maps/api/streetview?size=600x400&location=${lat},${lon}&heading=${heading}&pitch=0&fov=90&key=${apiKey}`;
+    
+    try {
+      const response = await fetch(url);
+      if (!response.ok) {
+        console.warn(`Street View unavailable for ${direction}:`, response.status);
+        continue;
+      }
+      const imageBuffer = await response.buffer();
+      const fileName = `remodels/streetview_${Date.now()}_${direction}.jpg`;
+      const file = bucket.file(fileName);
+      await file.save(imageBuffer, {
+        metadata: { contentType: "image/jpeg" },
+      });
+      console.log(`Street View image uploaded for ${direction}: ${fileName}`);
+      
+      const [signedUrl] = await file.getSignedUrl({
+        action: "read",
+        expires: "03-09-2500",
+      });
+      streetViewImages[direction] = signedUrl;
+      console.log(`Street View URL for ${direction}: ${signedUrl}`);
+    } catch (error) {
+      console.error(`Error fetching Street View for ${direction}:`, error.message);
+    }
+  }
+
+  return streetViewImages;
+}
 
 async function getBuildingData(lat, lon) {
   console.log("Fetching building data...");
@@ -228,7 +285,7 @@ async function getBuildingData(lat, lon) {
   const length = Math.round(Math.min(latFeet, lonFeet));
   const area = width * length;
 
-  const pitch = "6/12";
+  const pitch = "6/12"; // Fallback pitch; could be enhanced with image analysis
   const pitchFactor = 1.118;
   const roofArea = area * pitchFactor;
   const roofMaterial = "Asphalt Shingles";
@@ -244,16 +301,11 @@ async function getBuildingData(lat, lon) {
   };
 }
 
-async function analyzePhotos(photos, bucket) {
+async function analyzePhotos(photos, streetViewImages, bucket) {
   console.log("Analyzing photos for windows and doors...");
-  if (!photos || Object.keys(photos).length === 0) {
-    console.log("No photos provided, using default counts");
-    return { windows: 0, doors: 0, windowSizes: [], doorSizes: [], images: {}, isReliable: false };
-  }
-
   const directions = ["north", "south", "east", "west"];
   const allImages = directions.flatMap(direction => photos[direction] || []);
-  console.log(`Received ${allImages.length} images across all directions`);
+  console.log(`Received ${allImages.length} user images and ${Object.keys(streetViewImages).length} Street View images`);
 
   const CLARIFAI_API_KEY = process.env.CLARIFAI_API_KEY;
   if (!CLARIFAI_API_KEY) {
@@ -263,7 +315,7 @@ async function analyzePhotos(photos, bucket) {
       doors: allImages.length * 1,
       windowSizes: Array(allImages.length * 2).fill("3ft x 4ft"),
       doorSizes: Array(allImages.length * 1).fill("3ft x 7ft"),
-      images: {},
+      images: streetViewImages,
       isReliable: false,
     };
   }
@@ -272,19 +324,20 @@ async function analyzePhotos(photos, bucket) {
   let doorCount = 0;
   let windowSizes = [];
   let doorSizes = [];
-  const processedImages = {};
+  const processedImages = { ...streetViewImages };
   let isReliable = false;
 
+  // Process user-uploaded images first
   for (const direction of directions) {
     const images = photos[direction] || [];
     if (images.length === 0) continue;
 
-    console.log(`Processing ${images.length} photos for ${direction} direction`);
-    const photosToProcess = images.slice(0, 1); // Limit to 1 per direction
+    console.log(`Processing ${images.length} user photos for ${direction} direction`);
+    const photosToProcess = images.slice(0, 1);
 
     for (const [index, image] of photosToProcess.entries()) {
       try {
-        console.log(`Processing ${direction} photo ${index + 1}/${photosToProcess.length}, image data length: ${image?.length || 0}`);
+        console.log(`Processing ${direction} user photo ${index + 1}/${photosToProcess.length}, image data length: ${image?.length || 0}`);
 
         if (!image || typeof image !== "string" || !image.startsWith("data:image/")) {
           console.error(`Invalid image data for ${direction} photo ${index + 1}:`, image?.substring(0, 50));
@@ -327,7 +380,7 @@ async function analyzePhotos(photos, bucket) {
         }
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // Increased to 5s
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
 
         console.log(`Making Clarifai API call for ${direction} photo ${index + 1}`);
         const response = await fetch(
@@ -394,6 +447,83 @@ async function analyzePhotos(photos, bucket) {
         console.log(`${direction} photo ${index + 1} processed: ${windowCount} windows, ${doorCount} doors detected so far`);
       } catch (error) {
         console.error(`Error processing ${direction} photo ${index + 1}:`, error.message, error.stack);
+        windowCount += 2;
+        doorCount += 1;
+        windowSizes.push("3ft x 4ft", "3ft x 4ft");
+        doorSizes.push("3ft x 7ft");
+        continue;
+      }
+    }
+  }
+
+  // Process Street View images if no user images
+  if (allImages.length === 0) {
+    for (const direction of directions) {
+      const url = streetViewImages[direction];
+      if (!url) continue;
+
+      try {
+        console.log(`Processing Street View image for ${direction}`);
+        const response = await fetch(url);
+        const imageBuffer = await response.buffer();
+        const base64Image = imageBuffer.toString("base64");
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000);
+
+        console.log(`Making Clarifai API call for ${direction} Street View`);
+        const clarifaiResponse = await fetch(
+          "https://api.clarifai.com/v2/models/general-image-recognition/outputs",
+          {
+            method: "POST",
+            headers: {
+              Authorization: `Key ${CLARIFAI_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              inputs: [{ data: { image: { base64: base64Image } } }],
+            }),
+            signal: controller.signal,
+          }
+        );
+
+        clearTimeout(timeoutId);
+
+        if (!clarifaiResponse.ok) {
+          console.error(`Clarifai API error for ${direction} Street View:`, clarifaiResponse.status);
+          windowCount += 2;
+          doorCount += 1;
+          windowSizes.push("3ft x 4ft", "3ft x 4ft");
+          doorSizes.push("3ft x 7ft");
+          continue;
+        }
+
+        const data = await clarifaiResponse.json();
+        if (!data.outputs || !data.outputs[0] || !data.outputs[0].data || !data.outputs[0].data.concepts) {
+          console.error(`Unexpected Clarifai response for ${direction} Street View`);
+          windowCount += 2;
+          doorCount += 1;
+          windowSizes.push("3ft x 4ft", "3ft x 4ft");
+          doorSizes.push("3ft x 7ft");
+          continue;
+        }
+
+        isReliable = true;
+        data.outputs[0].data.concepts.forEach(concept => {
+          if (concept.name.toLowerCase().includes("window")) {
+            windowCount++;
+            const size = concept.value > 0.9 ? "4ft x 5ft" : "3ft x 4ft";
+            windowSizes.push(size);
+          }
+          if (concept.name.toLowerCase().includes("door")) {
+            doorCount++;
+            const size = concept.value > 0.9 ? "3ft x 8ft" : "3ft x 7ft";
+            doorSizes.push(size);
+          }
+        });
+        console.log(`${direction} Street View processed: ${windowCount} windows, ${doorCount} doors detected so far`);
+      } catch (error) {
+        console.error(`Error processing ${direction} Street View:`, error.message);
         windowCount += 2;
         doorCount += 1;
         windowSizes.push("3ft x 4ft", "3ft x 4ft");
