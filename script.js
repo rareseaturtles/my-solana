@@ -468,7 +468,10 @@ directions.forEach(direction => {
 
   document.getElementById(`capture${direction.charAt(0).toUpperCase() + direction.slice(1)}`).addEventListener("click", async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      // Request back-facing camera
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "environment" } // Prefer back camera
+      });
       const video = document.createElement("video");
       video.srcObject = stream;
       video.play();
@@ -555,7 +558,7 @@ directions.forEach(direction => {
       });
     } catch (error) {
       console.error(`Error accessing camera for ${direction}:`, error);
-      displayError(`Failed to access camera: ${error.message}. Please upload an image instead.`);
+      displayError(`Failed to access back camera: ${error.message}. Please try uploading an image instead or allow camera permissions.`);
     }
   });
 });
@@ -577,7 +580,7 @@ function fileToBase64(file) {
       resolve(reader.result);
     };
     reader.onerror = () => {
-      console.error(`Failed to read file ${file.name}`);
+      console.error(`Error reading file ${file.name}`);
       reject(new Error(`Failed to read file ${file.name}.`));
     };
     reader.readAsDataURL(file);
@@ -600,7 +603,7 @@ function displayError(message) {
   document.getElementById("results").innerHTML = `
     <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem; text-align: center;" role="alert">
       <p style="color: #d32f2f; margin: 0.5rem 0;">${message}</p>
-      <p style="margin: 0.5rem 0;">Please try again or contact Indy Home Improvements at <a href="tel:7653663344" style="color: #e67e22; text-decoration: none;">765-366-3344</a> for assistance.</p>
+      <p style="margin: 0.5rem 0;">Please try again or contact Indy Home Improvements at <a href="tel:7653663344" style="color: #e67e22; text-decoration: none;">765–366–3344</a> for assistance.</p>
     </div>
   `;
 }
@@ -610,7 +613,7 @@ function displayWarning(message) {
   const resultsDiv = document.getElementById("results");
   if (resultsDiv.innerHTML === "") {
     resultsDiv.innerHTML = `
-      <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem; text-align: center;" role="alert">
+      <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 2rem; text-align: center;" role="alert">
         <p style="color: #e67e22; margin: 0.5rem 0;">${message}</p>
       </div>
     `;
