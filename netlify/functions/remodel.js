@@ -72,7 +72,15 @@ exports.handler = async (event) => {
 
     const buildingData = await getBuildingData(lat, lon);
     const measurements = buildingData.measurements;
-    const roofInfo = await getRoofInfo(lat, lon, buildingData.roofInfo, process.env.GOOGLE_MAPS_API_KEY);
+
+    const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+    let streetViewData = { images: {}, status: "not_used", roofPitchStatus: "not_attempted" };
+    if (allImages.length === 0) {
+      streetViewData = await getStreetViewImages(lat, lon, GOOGLE_MAPS_API_KEY);
+    }
+
+    const roofInfo = await getRoofInfo(lat, lon, buildingData.roofInfo, photos, streetViewData.images, GOOGLE_MAPS_API_KEY);
+    streetViewData.roofPitchStatus = roofInfo.streetViewRoofPitchStatus || "not_attempted";
     const isMeasurementsReliable = buildingData.isReliable;
 
     let windowDoorInfo;
@@ -86,8 +94,6 @@ exports.handler = async (event) => {
         isReliable: true,
       };
     } else {
-      const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
-      const streetViewData = allImages.length === 0 ? await getStreetViewImages(lat, lon, GOOGLE_MAPS_API_KEY) : { images: {}, status: "not_used" };
       windowDoorInfo = await analyzePhotos(photos, streetViewData.images, bucket);
       windowDoorInfo.streetViewStatus = streetViewData.status;
     }
@@ -117,7 +123,6 @@ exports.handler = async (event) => {
     const costEstimates = calculateCostEstimates(materialEstimates, windowDoorCount, measurements.area);
     const timelineEstimate = calculateTimeline(measurements.area, windowDoorCount);
 
-    const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
     console.log("Google Maps API key retrieved:", GOOGLE_MAPS_API_KEY ? "Present" : "Missing");
     let satelliteImage = null;
     let satelliteImageError = null;
@@ -180,6 +185,7 @@ exports.handler = async (event) => {
         satelliteImageError,
         usedStreetView: allImages.length === 0 && Object.keys(processedImages).length > 0,
         streetViewStatus: windowDoorInfo.streetViewStatus,
+        streetViewRoofPitchStatus: streetViewData.roofPitchStatus,
       }),
     };
   } catch (error) {
@@ -195,7 +201,7 @@ async function getStreetViewImages(lat, lon, apiKey) {
   console.log("Checking Street View availability...");
   if (!apiKey) {
     console.log("Google Maps API key missing, skipping Street View.");
-    return { images: {}, status: "api_key_missing" };
+    return { images: {}, status: "api_key_missing", roofPitchStatus: "api_key_missing" };
   }
 
   const directions = ["north", "south", "east", "west"];
@@ -209,16 +215,16 @@ async function getStreetViewImages(lat, lon, apiKey) {
     metadataResponse = await fetch(metadataUrl);
     if (!metadataResponse.ok) {
       console.warn("Street View metadata request failed:", metadataResponse.status);
-      return { images: {}, status: "metadata_failed" };
+      return { images: {}, status: "metadata_failed", roofPitchStatus: "metadata_failed" };
     }
     const metadata = await metadataResponse.json();
     if (metadata.status !== "OK") {
       console.warn("Street View not available for this location:", metadata.status);
-      return { images: {}, status: "unavailable" };
+      return { images: {}, status: "unavailable", roofPitchStatus: "unavailable" };
     }
   } catch (error) {
     console.error("Error checking Street View metadata:", error.message);
-    return { images: {}, status: "metadata_error" };
+    return { images: {}, status: "metadata_error", roofPitchStatus: "metadata_error" };
   }
 
   // Fetch Street View images
@@ -261,6 +267,7 @@ async function getStreetViewImages(lat, lon, apiKey) {
   return {
     images: streetViewImages,
     status: Object.keys(streetViewImages).length > 0 ? "success" : "no_images",
+    roofPitchStatus: Object.keys(streetViewImages).length > 0 ? "success" : "no_images",
   };
 }
 
@@ -338,34 +345,17 @@ async function getBuildingData(lat, lon) {
   };
 }
 
-async function getRoofInfo(lat, lon, baseRoofInfo, apiKey) {
-  console.log("Estimating roof info...");
-  let { pitch, height, roofArea, roofMaterial } = baseRoofInfo;
-
-  if (!apiKey) {
-    console.log("Google Maps API key missing, using default roof info.");
-    return { pitch, height, roofArea, roofMaterial, isPitchReliable: false };
-  }
-
-  const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=18&size=600x400&maptype=satellite&key=${apiKey}`;
-  let imageBuffer;
-  try {
-    const response = await fetch(satelliteUrl);
-    if (!response.ok) {
-      console.warn("Failed to fetch satellite image for roof analysis:", response.status);
-      return { pitch, height, roofArea, roofMaterial, isPitchReliable: false };
-    }
-    imageBuffer = await response.buffer();
-  } catch (error) {
-    console.error("Error fetching satellite image for roof analysis:", error.message);
-    return { pitch, height, roofArea, roofMaterial, isPitchReliable: false };
-  }
-
+async function estimateRoofPitchFromImage(base64Image, source) {
+  console.log(`Estimating roof pitch from ${source}...`);
   const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
+  const CLARIFAI_API_KEY = process.env.CLARIFAI_API_KEY;
+  let pitch = "6/12";
   let isPitchReliable = false;
+  let pitchSource = "default";
+
+  // Try Google Cloud Vision API
   if (GOOGLE_VISION_API_KEY) {
     try {
-      const base64Image = imageBuffer.toString("base64");
       const visionResponse = await fetch(
         `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
         {
@@ -383,8 +373,8 @@ async function getRoofInfo(lat, lon, baseRoofInfo, apiKey) {
       );
 
       if (!visionResponse.ok) {
-        console.warn("Google Vision API request failed:", visionResponse.status);
-        return { pitch, height, roofArea, roofMaterial, isPitchReliable: false };
+        console.warn(`Google Vision API request failed for ${source}:`, visionResponse.status);
+        return { pitch, isPitchReliable, pitchSource: `${source}_failed` };
       }
 
       const visionData = await visionResponse.json();
@@ -395,16 +385,146 @@ async function getRoofInfo(lat, lon, baseRoofInfo, apiKey) {
         const steepnessScore = objects.find(obj => obj.name.toLowerCase().includes("roof"))?.score || 0;
         pitch = steepnessScore > 0.7 ? "8/12" : steepnessScore > 0.4 ? "6/12" : "4/12";
         isPitchReliable = true;
-        console.log(`Estimated roof pitch using Vision API: ${pitch}`);
-      } else {
-        console.log("No roof detected in satellite image, using default pitch.");
+        pitchSource = source;
+        console.log(`Estimated roof pitch using Vision API from ${source}: ${pitch}`);
+        return { pitch, isPitchReliable, pitchSource };
       }
     } catch (error) {
-      console.error("Error using Google Vision API for roof pitch:", error.message);
+      console.error(`Error using Google Vision API for ${source}:`, error.message);
     }
   }
 
-  return { pitch, height, roofArea, roofMaterial, isPitchReliable };
+  // Fallback to Clarifai if Vision API fails or isn't available
+  if (CLARIFAI_API_KEY) {
+    try {
+      const clarifaiResponse = await fetch(
+        "https://api.clarifai.com/v2/models/general-image-recognition/outputs",
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Key ${CLARIFAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            inputs: [{ data: { image: { base64: base64Image } } }],
+          }),
+        }
+      );
+
+      if (!clarifaiResponse.ok) {
+        console.warn(`Clarifai API request failed for ${source}:`, clarifaiResponse.status);
+        return { pitch, isPitchReliable, pitchSource: `${source}_failed` };
+      }
+
+      const clarifaiData = await clarifaiResponse.json();
+      const concepts = clarifaiData.outputs[0]?.data?.concepts || [];
+      const roofDetected = concepts.some(concept => concept.name.toLowerCase().includes("roof"));
+
+      if (roofDetected) {
+        const roofConcept = concepts.find(concept => concept.name.toLowerCase().includes("roof"));
+        const confidence = roofConcept?.value || 0;
+        pitch = confidence > 0.7 ? "8/12" : confidence > 0.4 ? "6/12" : "4/12";
+        isPitchReliable = true;
+        pitchSource = source;
+        console.log(`Estimated roof pitch using Clarifai from ${source}: ${pitch}`);
+      } else {
+        console.log(`No roof detected in ${source} using Clarifai.`);
+      }
+    } catch (error) {
+      console.error(`Error using Clarifai API for ${source}:`, error.message);
+    }
+  }
+
+  return { pitch, isPitchReliable, pitchSource: isPitchReliable ? source : `${source}_failed` };
+}
+
+async function getRoofInfo(lat, lon, baseRoofInfo, userPhotos, streetViewImages, apiKey) {
+  console.log("Estimating roof info...");
+  let { pitch, height, roofArea, roofMaterial } = baseRoofInfo;
+  let isPitchReliable = false;
+  let pitchSource = "default";
+  let streetViewRoofPitchStatus = "not_attempted";
+
+  const directions = ["north", "south", "east", "west"];
+  const allUserImages = directions
+    .flatMap(direction => userPhotos[direction] || [])
+    .filter(image => image && typeof image === "string" && image.startsWith("data:image/"));
+
+  // Step 1: Try user-uploaded images
+  if (allUserImages.length > 0) {
+    for (const [index, image] of allUserImages.entries()) {
+      try {
+        const base64Image = image.split(",")[1];
+        if (!base64Image) {
+          console.warn(`Failed to extract base64 data from user image ${index + 1}`);
+          continue;
+        }
+
+        const result = await estimateRoofPitchFromImage(base64Image, "user_image");
+        pitch = result.pitch;
+        isPitchReliable = result.isPitchReliable;
+        pitchSource = result.pitchSource;
+
+        if (isPitchReliable) break;
+      } catch (error) {
+        console.error(`Error processing user image ${index + 1} for roof pitch:`, error.message);
+        pitchSource = "user_image_failed";
+      }
+    }
+  }
+
+  // Step 2: Try Street View images if user images fail
+  if (!isPitchReliable && Object.keys(streetViewImages).length > 0) {
+    for (const direction of directions) {
+      const url = streetViewImages[direction];
+      if (!url) continue;
+
+      try {
+        console.log(`Processing Street View image for ${direction} for roof pitch`);
+        const response = await fetch(url);
+        const imageBuffer = await response.buffer();
+        const base64Image = imageBuffer.toString("base64");
+
+        const result = await estimateRoofPitchFromImage(base64Image, "street_view");
+        pitch = result.pitch;
+        isPitchReliable = result.isPitchReliable;
+        pitchSource = result.pitchSource;
+        streetViewRoofPitchStatus = result.pitchSource === "street_view" ? "success" : "failed";
+
+        if (isPitchReliable) break;
+      } catch (error) {
+        console.error(`Error processing Street View image for ${direction} for roof pitch:`, error.message);
+        pitchSource = "street_view_failed";
+        streetViewRoofPitchStatus = "failed";
+      }
+    }
+  }
+
+  // Step 3: Try satellite imagery if both user images and Street View fail
+  if (!isPitchReliable && apiKey) {
+    const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=18&size=600x400&maptype=satellite&key=${apiKey}`;
+    let imageBuffer;
+    try {
+      const response = await fetch(satelliteUrl);
+      if (!response.ok) {
+        console.warn("Failed to fetch satellite image for roof analysis:", response.status);
+        pitchSource = "satellite_failed";
+      } else {
+        imageBuffer = await response.buffer();
+        const base64Image = imageBuffer.toString("base64");
+
+        const result = await estimateRoofPitchFromImage(base64Image, "satellite");
+        pitch = result.pitch;
+        isPitchReliable = result.isPitchReliable;
+        pitchSource = result.pitchSource;
+      }
+    } catch (error) {
+      console.error("Error fetching satellite image for roof analysis:", error.message);
+      pitchSource = "satellite_failed";
+    }
+  }
+
+  return { pitch, height, roofArea, roofMaterial, isPitchReliable, pitchSource, streetViewRoofPitchStatus };
 }
 
 async function analyzePhotos(photos, streetViewImages, bucket) {
