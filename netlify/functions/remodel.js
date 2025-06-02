@@ -172,6 +172,7 @@ exports.handler = async (event) => {
       }),
     };
   } catch (error) {
+    console.error("Handler error:", error);
     return {
       statusCode: error.message.includes("Invalid address") || error.message.includes("Invalid photos data") ? 400 : 500,
       body: JSON.stringify({ error: error.message }),
@@ -237,7 +238,9 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
           roofImage = { image, contour: roofContour, direction };
           break;
         }
-      } catch (error) {}
+      } catch (error) {
+        console.error(`Error processing image for roof detection in ${direction}:`, error);
+      }
     }
     if (roofImage) break;
   }
@@ -279,7 +282,9 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
             scaleFactor = doorWidthFeet / pixelWidth; // Feet per pixel
             break;
           }
-        } catch (error) {}
+        } catch (error) {
+          console.error(`Error scaling image in ${direction}:`, error);
+        }
       }
       if (scaleFactor) break;
     }
@@ -316,7 +321,9 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
       if (steepestAngle > 45) pitch = "8/12";
       else if (steepestAngle > 30) pitch = "6/12";
       else pitch = "4/12";
-    } catch (error) {}
+    } catch (error) {
+      console.error("Error estimating roof pitch:", error);
+    }
   }
 
   const pitchFactor = { "4/12": 1.054, "6/12": 1.118, "8/12": 1.202 }[pitch] || 1.118;
