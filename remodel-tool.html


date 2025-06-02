@@ -138,45 +138,82 @@
     <main>
       <h2>Remodel Tool</h2>
       <form id="remodelForm">
-        <label for="address">Address</label>
-        <input type="text" id="address" name="address" required>
-
-        <div class="photo-group">
-          <label for="northPhotos">North-Facing Photos (Optional)</label>
-          <input type="file" id="northPhotos" name="northPhotos" accept="image/*" multiple>
-          <div id="northPreview" class="image-preview"></div>
-        </div>
-
-        <div class="photo-group">
-          <label for="southPhotos">South-Facing Photos (Optional)</label>
-          <input type="file" id="southPhotos" name="southPhotos" accept="image/*" multiple>
-          <div id="southPreview" class="image-preview"></div>
-        </div>
-
-        <div class="photo-group">
-          <label for="eastPhotos">East-Facing Photos (Optional)</label>
-          <input type="file" id="eastPhotos" name="eastPhotos" accept="image/*" multiple>
-          <div id="eastPreview" class="image-preview"></div>
-        </div>
-
-        <div class="photo-group">
-          <label for="westPhotos">West-Facing Photos (Optional)</label>
-          <input type="file" id="westPhotos" name="westPhotos" accept="image/*" multiple>
-          <div id="westPreview" class="image-preview"></div>
-        </div>
-
-        <label for="windowCount">Number of Windows (Optional)</label>
-        <input type="number" id="windowCount" name="windowCount" min="0">
-
-        <label for="doorCount">Number of Doors (Optional)</label>
-        <input type="number" id="doorCount" name="doorCount" min="0">
-
-        <button type="submit">Get Estimate</button>
-      </form>
-
-      <div id="results"></div>
-    </main>
+  <div>
+    <label for="address">Property Address:</label>
+    <input type="text" id="address" placeholder="1234 E 10th St, Indianapolis, IN 46202" required>
   </div>
+
+  <!-- North Direction -->
+  <div>
+    <label for="northPhotos">North-Facing Photo:</label>
+    <input type="file" id="northPhotos" accept="image/*" multiple>
+    <button type="button" id="captureNorth">Take Photo</button>
+    <div id="northPreview" style="margin-top: 10px;"></div>
+    <div id="northRetry" style="display: none; color: #d32f2f; margin-top: 10px;">
+      <p>Could not detect windows or doors in the north-facing photo. Please upload a closer photo of a window or door.</p>
+      <input type="file" id="northRetryPhotos" accept="image/*">
+      <div id="northRetryPreview" style="margin-top: 10px;"></div>
+    </div>
+  </div>
+
+  <!-- South Direction -->
+  <div>
+    <label for="southPhotos">South-Facing Photo:</label>
+    <input type="file" id="southPhotos" accept="image/*" multiple>
+    <button type="button" id="captureSouth">Take Photo</button>
+    <div id="southPreview" style="margin-top: 10px;"></div>
+    <div id="southRetry" style="display: none; color: #d32f2f; margin-top: 10px;">
+      <p>Could not detect windows or doors in the south-facing photo. Please upload a closer photo of a window or door.</p>
+      <input type="file" id="southRetryPhotos" accept="image/*">
+      <div id="southRetryPreview" style="margin-top: 10px;"></div>
+    </div>
+  </div>
+
+  <!-- East Direction -->
+  <div>
+    <label for="eastPhotos">East-Facing Photo:</label>
+    <input type="file" id="eastPhotos" accept="image/*" multiple>
+    <button type="button" id="captureEast">Take Photo</button>
+    <div id="eastPreview" style="margin-top: 10px;"></div>
+    <div id="eastRetry" style="display: none; color: #d32f2f; margin-top: 10px;">
+      <p>Could not detect windows or doors in the east-facing photo. Please upload a closer photo of a window or door.</p>
+      <input type="file" id="eastRetryPhotos" accept="image/*">
+      <div id="eastRetryPreview" style="margin-top: 10px;"></div>
+    </div>
+  </div>
+
+  <!-- West Direction -->
+  <div>
+    <label for="westPhotos">West-Facing Photo:</label>
+    <input type="file" id="westPhotos" accept="image/*" multiple>
+    <button type="button" id="captureWest">Take Photo</button>
+    <div id="westPreview" style="margin-top: 10px;"></div>
+    <div id="westRetry" style="display: none; color: #d32f2f; margin-top: 10px;">
+      <p>Could not detect windows or doors in the west-facing photo. Please upload a closer photo of a window or door.</p>
+      <input type="file" id="westRetryPhotos" accept="image/*">
+      <div id="westRetryPreview" style="margin-top: 10px;"></div>
+    </div>
+  </div>
+
+  <!-- Window and Door Counts -->
+  <div>
+    <label for="windowCount">Number of Windows (Optional):</label>
+    <input type="number" id="windowCount" min="0" placeholder="e.g., 4">
+  </div>
+  <div id="windowSizes" style="margin-top: 10px;"></div>
+
+  <div>
+    <label for="doorCount">Number of Doors (Optional):</label>
+    <input type="number" id="doorCount" min="0" placeholder="e.g., 2">
+  </div>
+  <div id="doorSizes" style="margin-top: 10px;"></div>
+
+  <div style="text-align: center; margin-top: 20px;">
+    <button type="submit" style="padding: 10px 20px; background-color: #e67e22; color: white; border: none; border-radius: 4px; cursor: pointer;">Get Estimate</button>
+  </div>
+</form>
+
+<div id="results" style="margin-top: 2rem;"></div>
 
   <footer>
     <p>&copy; 2025 Indy Home Improvements. All rights reserved. | <a href="tel:7653663344">Call Us: 765-366-3344</a></p>
