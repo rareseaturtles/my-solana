@@ -1,26 +1,17 @@
 const admin = require("firebase-admin");
 const fetch = require("node-fetch");
-const cv = require("opencv4nodejs"); // Add OpenCV dependency
+const cv = require("opencv4nodejs");
 
 exports.handler = async (event) => {
-  console.log("remodel invoked with event:", JSON.stringify(event));
-
   try {
     if (!admin.apps.length) {
-      console.log("Initializing Firebase Admin...");
-      try {
-        admin.initializeApp({
-          credential: admin.credential.cert({
-            projectId: "turtle-treasure-giveaway",
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-          }),
-        });
-        console.log("Firebase Admin initialized successfully in remodel");
-      } catch (initError) {
-        console.error("Firebase Admin initialization failed:", initError.message);
-        throw new Error("Failed to initialize Firebase: " + initError.message);
-      }
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: "turtle-treasure-giveaway",
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+          privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+        }),
+      });
     }
 
     const db = admin.firestore();
@@ -35,11 +26,10 @@ exports.handler = async (event) => {
     try {
       body = JSON.parse(event.body);
     } catch (parseError) {
-      console.error("Failed to parse request body:", parseError.message);
       throw new Error("Invalid request body: Failed to parse JSON");
     }
 
-    const { address, photos, retryPhotos, windowCount, doorCount, windowSizes, doorSizes, roofOutline } = body;
+    const { address, photos, retryPhotos, windowCount, doorCount, windowSizes, doorSizes } = body;
 
     if (!address) {
       throw new Error("Missing address in request body");
@@ -61,7 +51,10 @@ exports.handler = async (event) => {
     const allRetryImages = directions
       .flatMap(direction => (retryPhotos && retryPhotos[direction]) || [])
       .filter(image => image && typeof image === "string" && image.startsWith("data:image/"));
-    console.log(`Processing remodel for address: ${address}, total user images received: ${allImages.length}, total retry images received: ${allRetryImages.length}`);
+
+    if (allImages.length < 4 && allRetryImages.length < 4) {
+      throw new Error("Please upload at least one photo for each direction (north, south, east, west)");
+    }
 
     const addressResponse = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
@@ -76,22 +69,14 @@ exports.handler = async (event) => {
       throw new Error("Invalid address: No results found");
     }
 
-    console.log("Address validated:", addressData[0].display_name);
     const lat = parseFloat(addressData[0].lat);
     const lon = parseFloat(addressData[0].lon);
 
-    const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
-    let streetViewData = { images: {}, status: "not_used", roofPitchStatus: "not_attempted" };
-    if (allImages.length === 0 && allRetryImages.length === 0) {
-      streetViewData = await getStreetViewImages(lat, lon, GOOGLE_MAPS_API_KEY);
-    }
-
-    // Get building data using Google Maps satellite imagery
-    const buildingData = await getBuildingDataFromSatellite(lat, lon, GOOGLE_MAPS_API_KEY, roofOutline);
+    // Get building data from user images
+    const buildingData = await getBuildingDataFromUserImages(photos, retryPhotos, bucket);
     const measurements = buildingData.measurements;
 
-    const roofInfo = await getRoofInfo(lat, lon, buildingData.roofInfo, photos, streetViewData.images, GOOGLE_MAPS_API_KEY);
-    streetViewData.roofPitchStatus = roofInfo.streetViewRoofPitchStatus || "not_attempted";
+    const roofInfo = buildingData.roofInfo;
     const isMeasurementsReliable = buildingData.isReliable;
 
     let windowDoorInfo;
@@ -104,11 +89,8 @@ exports.handler = async (event) => {
         images: {},
         isReliable: true,
       };
-      console.log(`Using manual window/door counts and sizes: ${windowDoorInfo.windows} windows, ${windowDoorInfo.doors} doors`);
     } else {
-      windowDoorInfo = await analyzePhotosWithOpenCV(photos, retryPhotos, streetViewData.images, bucket);
-      windowDoorInfo.streetViewStatus = streetViewData.status;
-
+      windowDoorInfo = await analyzePhotosWithGoogleVision(photos, retryPhotos, bucket);
       const retryDirections = windowDoorInfo.retryDirections || [];
       if (retryDirections.length > 0) {
         return {
@@ -148,24 +130,6 @@ exports.handler = async (event) => {
     const costEstimates = calculateCostEstimates(materialEstimates, windowDoorCount, measurements.area);
     const timelineEstimate = calculateTimeline(measurements.area, windowDoorCount);
 
-    let satelliteImage = null;
-    let satelliteImageError = null;
-    if (GOOGLE_MAPS_API_KEY) {
-      satelliteImage = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=20&size=600x600&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
-      try {
-        const imageResponse = await fetch(satelliteImage);
-        if (!imageResponse.ok) {
-          satelliteImageError = `Google Maps API error: ${await imageResponse.text()}`;
-          satelliteImage = null;
-        }
-      } catch (error) {
-        satelliteImageError = `Network error: ${error.message}`;
-        satelliteImage = null;
-      }
-    } else {
-      satelliteImageError = "Google Maps API key is missing.";
-    }
-
     const remodelEntry = {
       address: addressData[0].display_name,
       measurements,
@@ -176,15 +140,12 @@ exports.handler = async (event) => {
       roofInfo,
       processedImages,
       allUploadedImages,
-      satelliteImage,
-      satelliteImageError,
       lat,
       lon,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     };
 
     const docRef = await db.collection("remodels").add(remodelEntry);
-    console.log("Remodel entry saved to Firestore with ID:", docRef.id);
 
     return {
       statusCode: 200,
@@ -200,15 +161,9 @@ exports.handler = async (event) => {
         roofInfo,
         processedImages,
         allUploadedImages,
-        satelliteImage,
-        satelliteImageError,
-        usedStreetView: (allImages.length + allRetryImages.length) === 0 && Object.keys(processedImages).length > 0,
-        streetViewStatus: windowDoorInfo.streetViewStatus,
-        streetViewRoofPitchStatus: streetViewData.roofPitchStatus,
       }),
     };
   } catch (error) {
-    console.error("Error in remodel:", error.message, error.stack);
     return {
       statusCode: error.message.includes("Invalid address") || error.message.includes("Invalid photos data") ? 400 : 500,
       body: JSON.stringify({ error: error.message }),
@@ -216,127 +171,91 @@ exports.handler = async (event) => {
   }
 };
 
-async function getStreetViewImages(lat, lon, apiKey) {
-  if (!apiKey) {
-    return { images: {}, status: "api_key_missing", roofPitchStatus: "api_key_missing" };
-  }
-
+async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
   const directions = ["north", "south", "east", "west"];
-  const headings = [0, 180, 90, 270];
-  const streetViewImages = {};
+  let width = 40, length = 32, area = 1280, isReliable = false;
+  let pitch = "6/12", height = 16, roofArea = 1431, roofMaterial = "Asphalt Shingles";
 
-  const metadataUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lon}&key=${apiKey}`;
-  let metadataResponse;
-  try {
-    metadataResponse = await fetch(metadataUrl);
-    if (!metadataResponse.ok) {
-      return { images: {}, status: "metadata_failed", roofPitchStatus: "metadata_failed" };
-    }
-    const metadata = await metadataResponse.json();
-    if (metadata.status !== "OK") {
-      return { images: {}, status: "unavailable", roofPitchStatus: "unavailable" };
-    }
-  } catch (error) {
-    return { images: {}, status: "metadata_error", roofPitchStatus: "metadata_error" };
-  }
-
-  for (let i = 0; i < directions.length; i++) {
-    const direction = directions[i];
-    const heading = headings[i];
-    const url = `https://maps.googleapis.com/maps/api/streetview?size=600x400&location=${lat},${lon}&heading=${heading}&pitch=0&fov=90&key=${apiKey}`;
-
-    for (let attempt = 0; attempt < 2; attempt++) {
+  // Look for a high-angle photo showing the roof
+  let roofImage = null;
+  for (const direction of directions) {
+    const images = (retryPhotos && retryPhotos[direction] && retryPhotos[direction].length > 0) ? retryPhotos[direction] : photos[direction] || [];
+    for (const image of images) {
       try {
-        const response = await fetch(url);
-        if (!response.ok) {
-          continue;
+        const base64Image = image.split(",")[1];
+        const img = cv.imdecode(Buffer.from(base64Image, "base64"));
+        const gray = img.cvtColor(cv.COLOR_BGR2GRAY);
+        const edges = gray.canny(50, 150);
+        const contours = edges.findContours(cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+
+        let roofDetected = false;
+        let maxArea = 0;
+        let roofContour = null;
+        for (const contour of contours) {
+          const area = contour.area;
+          if (area > maxArea && area > 1000) {
+            maxArea = area;
+            roofContour = contour;
+            roofDetected = true;
+          }
         }
-        const imageBuffer = await response.buffer();
-        const fileName = `remodels/streetview_${Date.now()}_${direction}.jpg`;
-        const file = bucket.file(fileName);
-        await file.save(imageBuffer, {
-          metadata: { contentType: "image/jpeg" },
-        });
-        const [signedUrl] = await file.getSignedUrl({
-          action: "read",
-          expires: "03-09-2500",
-        });
-        streetViewImages[direction] = signedUrl;
-        break;
+
+        if (roofDetected) {
+          roofImage = { image, contour: roofContour, direction };
+          break;
+        }
       } catch (error) {}
     }
+    if (roofImage) break;
   }
 
-  return {
-    images: streetViewImages,
-    status: Object.keys(streetViewImages).length > 0 ? "success" : "no_images",
-    roofPitchStatus: Object.keys(streetViewImages).length > 0 ? "success" : "no_images",
-  };
-}
+  if (roofImage) {
+    // Find a reference object (e.g., door) to scale the image
+    let scaleFactor = null;
+    for (const direction of directions) {
+      const images = (retryPhotos && retryPhotos[direction] && retryPhotos[direction].length > 0) ? retryPhotos[direction] : photos[direction] || [];
+      for (const image of images) {
+        try {
+          const base64Image = image.split(",")[1];
+          const visionResponse = await fetch(
+            `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                requests: [
+                  {
+                    image: { content: base64Image },
+                    features: [{ type: "OBJECT_LOCALIZATION" }],
+                  },
+                ],
+              }),
+            }
+          );
 
-async function getBuildingDataFromSatellite(lat, lon, apiKey, roofOutline) {
-  if (!apiKey) {
-    return {
-      measurements: { width: 40, length: 32, area: 1280 },
-      roofInfo: { pitch: "6/12", height: 16, roofArea: 1431, roofMaterial: "Asphalt Shingles" },
-      isReliable: false,
-    };
-  }
+          if (!visionResponse.ok) continue;
 
-  const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=20&size=600x600&maptype=satellite&key=${apiKey}`;
-  let imageBuffer;
-  try {
-    const response = await fetch(satelliteUrl);
-    if (!response.ok) {
-      return {
-        measurements: { width: 40, length: 32, area: 1280 },
-        roofInfo: { pitch: "6/12", height: 16, roofArea: 1431, roofMaterial: "Asphalt Shingles" },
-        isReliable: false,
-      };
-    }
-    imageBuffer = await response.buffer();
-  } catch (error) {
-    return {
-      measurements: { width: 40, length: 32, area: 1280 },
-      roofInfo: { pitch: "6/12", height: 16, roofArea: 1431, roofMaterial: "Asphalt Shingles" },
-      isReliable: false,
-    };
-  }
+          const visionData = await visionResponse.json();
+          const objects = visionData.responses[0]?.localizedObjectAnnotations || [];
+          const door = objects.find(obj => obj.name.toLowerCase().includes("door") && obj.score > 0.5);
 
-  let width = 40, length = 32, area = 1280, isReliable = false;
-  if (roofOutline) {
-    // Assume roofOutline is an array of points [(x1, y1), (x2, y2), ...] in pixels
-    const pixelArea = calculatePolygonArea(roofOutline);
-    const feetPerPixel = 0.1; // At zoom 20
-    area = Math.round(pixelArea * feetPerPixel * feetPerPixel);
-    width = Math.round(Math.sqrt(area) * 1.25); // Approximate width (assuming rectangular)
-    length = Math.round(area / width);
-    isReliable = true;
-  } else {
-    // Use OpenCV to detect roof outline
-    const img = cv.imdecode(Buffer.from(imageBuffer));
-    const gray = img.cvtColor(cv.COLOR_BGR2GRAY);
-    const edges = gray.canny(50, 150);
-    const contours = edges.findContours(cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-    let maxArea = 0;
-    let roofContour = null;
-
-    for (const contour of contours) {
-      const area = contour.area;
-      if (area > maxArea && area > 1000) { // Minimum area threshold
-        maxArea = area;
-        roofContour = contour;
+          if (door) {
+            const vertices = door.boundingPoly.normalizedVertices;
+            const pixelWidth = Math.abs(vertices[1].x - vertices[0].x) * 600; // Assume image width is 600px
+            const doorWidthFeet = 3; // Standard door width
+            scaleFactor = doorWidthFeet / pixelWidth; // Feet per pixel
+            break;
+          }
+        } catch (error) {}
       }
+      if (scaleFactor) break;
     }
 
-    if (roofContour) {
-      const rect = roofContour.minAreaRect();
-      const pixelWidth = rect.size.width;
-      const pixelLength = rect.size.height;
-      const feetPerPixel = 0.1;
-      width = Math.round(pixelWidth * feetPerPixel);
-      length = Math.round(pixelLength * feetPerPixel);
-      area = width * length;
+    if (scaleFactor) {
+      const pixelArea = roofImage.contour.area;
+      area = Math.round(pixelArea * scaleFactor * scaleFactor);
+      width = Math.round(Math.sqrt(area) * 1.25);
+      length = Math.round(area / width);
       isReliable = true;
 
       if (area < 500 || area > 5000) {
@@ -346,136 +265,76 @@ async function getBuildingDataFromSatellite(lat, lon, apiKey, roofOutline) {
         isReliable = false;
       }
     }
+
+    // Estimate pitch using Hough Lines
+    try {
+      const base64Image = roofImage.image.split(",")[1];
+      const img = cv.imdecode(Buffer.from(base64Image, "base64"));
+      const gray = img.cvtColor(cv.COLOR_BGR2GRAY);
+      const edges = gray.canny(50, 150);
+      const lines = edges.houghLinesP(0.1, Math.PI / 180, 50, 50, 10);
+
+      let steepestAngle = 0;
+      for (const line of lines) {
+        const angle = Math.atan2(line.y2 - line.y1, line.x2 - line.x1) * 180 / Math.PI;
+        if (Math.abs(angle) > steepestAngle) steepestAngle = Math.abs(angle);
+      }
+
+      if (steepestAngle > 45) pitch = "8/12";
+      else if (steepestAngle > 30) pitch = "6/12";
+      else pitch = "4/12";
+    } catch (error) {}
   }
 
-  const pitch = "6/12";
-  const pitchFactor = 1.118;
-  const roofArea = area * pitchFactor;
-  const roofMaterial = "Asphalt Shingles";
+  const pitchFactor = { "4/12": 1.054, "6/12": 1.118, "8/12": 1.202 }[pitch] || 1.118;
+  roofArea = area * pitchFactor;
   const baseHeight = 10;
-  const roofHeight = (width / 2) * (6 / 12);
-  const totalHeight = baseHeight + roofHeight;
+  const roofHeight = (width / 2) * (parseInt(pitch.split("/")[0]) / 12);
+  height = baseHeight + roofHeight;
 
   return {
     measurements: { width, length, area },
-    roofInfo: { pitch, height: Math.round(totalHeight), roofArea: Math.round(roofArea), roofMaterial },
+    roofInfo: { pitch, height: Math.round(height), roofArea: Math.round(roofArea), roofMaterial },
     isReliable,
   };
 }
 
-function calculatePolygonArea(points) {
-  let area = 0;
-  const n = points.length;
-  for (let i = 0; i < n; i++) {
-    const j = (i + 1) % n;
-    area += points[i].x * points[j].y;
-    area -= points[j].x * points[i].y;
-  }
-  return Math.abs(area) / 2;
-}
-
-async function getRoofInfo(lat, lon, baseRoofInfo, userPhotos, streetViewImages, apiKey) {
-  let { pitch, height, roofArea, roofMaterial } = baseRoofInfo;
-  let isPitchReliable = false;
-  let pitchSource = "default";
-  let streetViewRoofPitchStatus = "not_attempted";
-
-  const directions = ["north", "south", "east", "west"];
-  const allUserImages = directions
-    .flatMap(direction => userPhotos[direction] || [])
-    .filter(image => image && typeof image === "string" && image.startsWith("data:image/"));
-
-  if (allUserImages.length > 0) {
-    for (const [index, image] of allUserImages.entries()) {
-      try {
-        const base64Image = image.split(",")[1];
-        const img = cv.imdecode(Buffer.from(base64Image, "base64"));
-        const gray = img.cvtColor(cv.COLOR_BGR2GRAY);
-        const edges = gray.canny(50, 150);
-        const lines = edges.houghLinesP(0.1, Math.PI / 180, 50, 50, 10);
-
-        let steepestAngle = 0;
-        for (const line of lines) {
-          const angle = Math.atan2(line.y2 - line.y1, line.x2 - line.x1) * 180 / Math.PI;
-          if (Math.abs(angle) > steepestAngle) steepestAngle = Math.abs(angle);
-        }
-
-        if (steepestAngle > 45) pitch = "8/12";
-        else if (steepestAngle > 30) pitch = "6/12";
-        else pitch = "4/12";
-        isPitchReliable = true;
-        pitchSource = "user_image";
-        break;
-      } catch (error) {
-        pitchSource = "user_image_failed";
-      }
-    }
-  }
-
-  if (!isPitchReliable && Object.keys(streetViewImages).length > 0) {
-    for (const direction of directions) {
-      const url = streetViewImages[direction];
-      if (!url) continue;
-
-      try {
-        const response = await fetch(url);
-        const imageBuffer = await response.buffer();
-        const img = cv.imdecode(imageBuffer);
-        const gray = img.cvtColor(cv.COLOR_BGR2GRAY);
-        const edges = gray.canny(50, 150);
-        const lines = edges.houghLinesP(0.1, Math.PI / 180, 50, 50, 10);
-
-        let steepestAngle = 0;
-        for (const line of lines) {
-          const angle = Math.atan2(line.y2 - line.y1, line.x2 - line.x1) * 180 / Math.PI;
-          if (Math.abs(angle) > steepestAngle) steepestAngle = Math.abs(angle);
-        }
-
-        if (steepestAngle > 45) pitch = "8/12";
-        else if (steepestAngle > 30) pitch = "6/12";
-        else pitch = "4/12";
-        isPitchReliable = true;
-        pitchSource = "street_view";
-        streetViewRoofPitchStatus = "success";
-        break;
-      } catch (error) {
-        streetViewRoofPitchStatus = "failed";
-      }
-    }
-  }
-
-  const pitchValues = {
-    "4/12": 1.054,
-    "6/12": 1.118,
-    "8/12": 1.202,
-  };
-  const pitchFactor = pitchValues[pitch] || 1.118;
-  roofArea = baseRoofInfo.roofArea * (pitchFactor / 1.118);
-
-  return { pitch, height, roofArea: Math.round(roofArea), roofMaterial, isPitchReliable, pitchSource, streetViewRoofPitchStatus };
-}
-
-async function analyzePhotosWithOpenCV(photos, retryPhotos, streetViewImages, bucket) {
+async function analyzePhotosWithGoogleVision(photos, retryPhotos, bucket) {
   const directions = ["north", "south", "east", "west"];
   const allImages = directions.flatMap(direction => photos[direction] || []);
   const allRetryImages = directions.flatMap(direction => (retryPhotos && retryPhotos[direction]) || []);
+
+  if (allImages.length < 4 && allRetryImages.length < 4) {
+    throw new Error("Please upload at least one photo for each direction (north, south, east, west)");
+  }
+
+  const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
+  if (!GOOGLE_VISION_API_KEY) {
+    return {
+      windows: 0,
+      doors: 0,
+      windowSizes: [],
+      doorSizes: [],
+      images: {},
+      allUploadedImages: {},
+      isReliable: false,
+      retryDirections: directions,
+    };
+  }
 
   let windowCount = 0;
   let doorCount = 0;
   let windowSizes = [];
   let doorSizes = [];
-  let processedImages = { ...streetViewImages };
+  let processedImages = {};
   const allUploadedImages = {};
   let isReliable = false;
   const retryDirections = [];
 
-  // Load Haar Cascade classifiers (assumes you have these files)
-  const windowCascade = new cv.CascadeClassifier("haarcascade_window.xml");
-  const doorCascade = new cv.CascadeClassifier("haarcascade_door.xml");
-
   for (const direction of directions) {
     const images = (retryPhotos && retryPhotos[direction] && retryPhotos[direction].length > 0) ? retryPhotos[direction] : photos[direction] || [];
     if (images.length === 0) {
+      retryDirections.push(direction);
       continue;
     }
 
@@ -499,32 +358,51 @@ async function analyzePhotosWithOpenCV(photos, retryPhotos, streetViewImages, bu
       processedImages[direction] = allUploadedImages[direction][0];
     }
 
-    const photosToProcess = images;
     let detectedInDirection = false;
-
-    for (const [index, image] of photosToProcess.entries()) {
+    for (const [index, image] of images.entries()) {
       try {
         const base64Image = image.split(",")[1];
-        const img = cv.imdecode(Buffer.from(base64Image, "base64"));
-        const gray = img.cvtColor(cv.COLOR_BGR2GRAY);
+        const visionResponse = await fetch(
+          `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              requests: [
+                {
+                  image: { content: base64Image },
+                  features: [{ type: "OBJECT_LOCALIZATION" }],
+                },
+              ],
+            }),
+          }
+        );
 
-        const windows = windowCascade.detectMultiScale(gray, 1.1, 3).objects;
-        const doors = doorCascade.detectMultiScale(gray, 1.1, 3).objects;
-
-        windowCount += windows.length;
-        doorCount += doors.length;
-
-        for (let i = 0; i < windows.length; i++) {
-          const size = Math.random() > 0.5 ? "4ft x 5ft" : "3ft x 4ft";
-          windowSizes.push(size);
+        if (!visionResponse.ok) {
+          retryDirections.push(direction);
+          continue;
         }
 
-        for (let i = 0; i < doors.length; i++) {
-          const size = Math.random() > 0.5 ? "3ft x 8ft" : "3ft x 7ft";
-          doorSizes.push(size);
+        const visionData = await visionResponse.json();
+        const objects = visionData.responses[0]?.localizedObjectAnnotations || [];
+        const windowsInImage = objects.filter(obj => obj.name.toLowerCase().includes("window") && obj.score > 0.4).length;
+        const doorsInImage = objects.filter(obj => obj.name.toLowerCase().includes("door") && obj.score > 0.4).length;
+
+        if (windowsInImage > 0) {
+          windowCount += windowsInImage;
+          for (let i = 0; i < windowsInImage; i++) {
+            windowSizes.push(Math.random() > 0.5 ? "4ft x 5ft" : "3ft x 4ft");
+          }
         }
 
-        if (windows.length === 0 && doors.length === 0) {
+        if (doorsInImage > 0) {
+          doorCount += doorsInImage;
+          for (let i = 0; i < doorsInImage; i++) {
+            doorSizes.push(Math.random() > 0.5 ? "3ft x 8ft" : "3ft x 7ft");
+          }
+        }
+
+        if (windowsInImage === 0 && doorsInImage === 0) {
           retryDirections.push(direction);
         } else {
           detectedInDirection = true;
@@ -533,40 +411,6 @@ async function analyzePhotosWithOpenCV(photos, retryPhotos, streetViewImages, bu
       } catch (error) {
         retryDirections.push(direction);
       }
-    }
-  }
-
-  if (allImages.length === 0 && allRetryImages.length === 0) {
-    for (const direction of directions) {
-      const url = streetViewImages[direction];
-      if (!url) continue;
-
-      try {
-        const response = await fetch(url);
-        const imageBuffer = await response.buffer();
-        const img = cv.imdecode(imageBuffer);
-        const gray = img.cvtColor(cv.COLOR_BGR2GRAY);
-
-        const windows = windowCascade.detectMultiScale(gray, 1.1, 3).objects;
-        const doors = doorCascade.detectMultiScale(gray, 1.1, 3).objects;
-
-        windowCount += windows.length;
-        doorCount += doors.length;
-
-        for (let i = 0; i < windows.length; i++) {
-          const size = Math.random() > 0.5 ? "4ft x 5ft" : "3ft x 4ft";
-          windowSizes.push(size);
-        }
-
-        for (let i = 0; i < doors.length; i++) {
-          const size = Math.random() > 0.5 ? "3ft x 8ft" : "3ft x 7ft";
-          doorSizes.push(size);
-        }
-
-        if (windows.length > 0 || doors.length > 0) {
-          isReliable = true;
-        }
-      } catch (error) {}
     }
   }
 
@@ -605,37 +449,49 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area) {
   let totalCost = 0;
   const costBreakdown = [];
 
+  // Material-specific labor rates
+  const sidingLaborRate = 3.50; // $3.50/sq ft
+  const paintLaborRate = 1.50; // $1.50/sq ft
+  const windowLaborRate = 200; // $200/window
+  const doorLaborRate = 350; // $350/door
+  const roofingLaborRate = 2.25; // $2.25/sq ft
+
   materialEstimates.forEach(item => {
     if (item.includes("Siding")) {
       const sidingArea = parseInt(item.match(/\d+/)[0]);
-      const cost = sidingArea * 8;
-      totalCost += cost;
-      costBreakdown.push(`Siding: $${cost} (${sidingArea} sq ft at $8/sq ft)`);
+      const materialCost = sidingArea * 8; // $8/sq ft for vinyl siding
+      const laborCost = sidingArea * sidingLaborRate; // $3.50/sq ft
+      totalCost += materialCost + laborCost;
+      costBreakdown.push(`Siding Material: $${materialCost} (${sidingArea} sq ft at $8/sq ft)`);
+      costBreakdown.push(`Siding Labor: $${laborCost} (${sidingArea} sq ft at $${sidingLaborRate}/sq ft)`);
     } else if (item.includes("Exterior Paint")) {
       const gallons = parseInt(item.match(/\d+/)[0]);
-      const paintCost = gallons * 40;
-      const paintLaborCost = area * 1.5;
-      totalCost += paintCost + paintLaborCost;
-      costBreakdown.push(`Exterior Paint: $${paintCost} (${gallons} gallons at $40/gallon), Paint Labor: $${paintLaborCost} (${area} sq ft at $1.50/sq ft)`);
+      const materialCost = gallons * 40; // $40/gallon
+      const laborCost = area * paintLaborRate; // $1.50/sq ft
+      totalCost += materialCost + laborCost;
+      costBreakdown.push(`Exterior Paint Material: $${materialCost} (${gallons} gallons at $40/gallon)`);
+      costBreakdown.push(`Exterior Paint Labor: $${laborCost} (${area} sq ft at $${paintLaborRate}/sq ft)`);
     } else if (item.includes("Window")) {
-      const cost = 500;
-      totalCost += cost;
-      costBreakdown.push(`${item}: $${cost}`);
+      const materialCost = 500; // $500 per window
+      const laborCost = windowLaborRate; // $200/window
+      totalCost += materialCost + laborCost;
+      costBreakdown.push(`${item} Material: $${materialCost}`);
+      costBreakdown.push(`${item} Labor: $${laborCost}`);
     } else if (item.includes("Door")) {
-      const cost = 1000;
-      totalCost += cost;
-      costBreakdown.push(`${item}: $${cost}`);
+      const materialCost = 1000; // $1,000 per door
+      const laborCost = doorLaborRate; // $350/door
+      totalCost += materialCost + laborCost;
+      costBreakdown.push(`${item} Material: $${materialCost}`);
+      costBreakdown.push(`${item} Labor: $${laborCost}`);
     } else if (item.includes("Roofing")) {
       const roofArea = parseInt(item.match(/\d+/)[0]);
-      const cost = roofArea * 3;
-      totalCost += cost;
-      costBreakdown.push(`Roofing: $${cost} (${roofArea} sq ft at $3/sq ft)`);
+      const materialCost = roofArea * 3; // $3/sq ft for shingles
+      const laborCost = roofArea * roofingLaborRate; // $2.25/sq ft
+      totalCost += materialCost + laborCost;
+      costBreakdown.push(`Roofing Material: $${materialCost} (${roofArea} sq ft at $3/sq ft)`);
+      costBreakdown.push(`Roofing Labor: $${laborCost} (${roofArea} sq ft at $${roofingLaborRate}/sq ft)`);
     }
   });
-
-  const laborCost = area * 25;
-  totalCost += laborCost;
-  costBreakdown.push(`Labor: $${laborCost} (estimated at $25/sq ft for ${area} sq ft)`);
 
   return { totalCost: Math.round(totalCost), costBreakdown };
 }
