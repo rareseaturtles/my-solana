@@ -32,6 +32,14 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0);
   console.log(`Total images selected: ${totalImages}`);
 
+  // Warn if more than one image per direction
+  const directions = ["north", "south", "east", "west"];
+  for (const direction of directions) {
+    if (photos[direction].length > 1) {
+      displayWarning(`Multiple images uploaded for ${direction}. Only the first image will be processed for analysis, but all images will be saved.`);
+    }
+  }
+
   // Convert files to base64 with enhanced error handling
   let resolvedPhotos;
   try {
@@ -115,6 +123,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const timelineEstimate = result.timelineEstimate || "N/A";
     const roofInfo = result.roofInfo || { pitch: "N/A", height: "N/A", roofArea: "N/A", roofMaterial: "N/A", isPitchReliable: false, pitchSource: "default" };
     const processedImages = result.processedImages || {};
+    const allUploadedImages = result.allUploadedImages || {};
     const satelliteImage = result.satelliteImage || null;
     const satelliteImageError = result.satelliteImageError || null;
     const usedStreetView = result.usedStreetView || false;
@@ -123,7 +132,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const lat = result.addressData?.lat || 0;
     const lon = result.addressData?.lon || 0;
 
-    const isCostReliable = isMeasurementsReliable && isWindowDoorCountReliable;
+    const isCostReliable = isMeasurementsReliable || isWindowDoorCountReliable; // Relaxed condition
 
     let resultsHtml = `
       <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem;" role="region" aria-label="Remodel Estimate Results">
@@ -137,7 +146,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
     if (!isMeasurementsReliable) {
       resultsHtml += `
-        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Building dimensions are estimates due to limited data. For accurate results, upload photos or provide window/door counts.</p>
+        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Building dimensions are estimates due to limited data from OpenStreetMap. For accurate results, please verify the dimensions.</p>
       `;
     }
 
@@ -176,6 +185,12 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       }
     }
 
+    if (!isWindowDoorCountReliable && !windowCount && !doorCount) {
+      resultsHtml += `
+        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Window and door counts are estimates due to lack of clear images or manual input. Please upload photos or provide counts for better accuracy.</p>
+      `;
+    }
+
     resultsHtml += `
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Material Breakdown</h3>
       <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
@@ -188,9 +203,14 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
         <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${costEstimates.costBreakdown.map(item => `<li>${item}</li>`).join("")}</ul>
         <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Costs are approximate and may vary based on final measurements, material prices, and labor rates.</p>
       `;
+      if (!isMeasurementsReliable || !isWindowDoorCountReliable) {
+        resultsHtml += `
+          <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">This estimate is based on partial data. For a more accurate estimate, upload clear photos or provide window/door counts.</p>
+        `;
+      }
     } else {
       resultsHtml += `
-        <p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable due to insufficient data accuracy. Please provide more details or upload clear photos of the house exterior.</p>
+        <p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable because both building dimensions and window/door counts are unreliable. Please provide manual counts or upload clear photos of the house exterior.</p>
       `;
     }
 
@@ -203,13 +223,22 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       <p style="margin: 0.5rem 0;"><a href="https://www.in.gov/dhs/building-construction/permits/" target="_blank" style="color: #e67e22; text-decoration: none;">Learn More About Indiana Permits</a></p>
     `;
 
-    const directions = ["north", "south", "east", "west"];
     for (const direction of directions) {
       if (processedImages[direction]) {
         resultsHtml += `
-          <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">${direction.charAt(0).toUpperCase() + direction.slice(1)}-Facing Image</h3>
+          <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">${direction.charAt(0).toUpperCase() + direction.slice(1)}-Facing Image (Processed)</h3>
           <div style="text-align: center;">
             <img src="${processedImages[direction]}" alt="${direction} House Image" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin: 1rem 0;">
+          </div>
+        `;
+      }
+      if (allUploadedImages[direction] && allUploadedImages[direction].length > 0) {
+        resultsHtml += `
+          <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">${direction.charAt(0).toUpperCase() + direction.slice(1)}-Facing Images (All Uploaded)</h3>
+          <div style="text-align: center;">
+            ${allUploadedImages[direction].map(url => `
+              <img src="${url}" alt="${direction} House Image" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin: 1rem 0;">
+            `).join("")}
           </div>
         `;
       }
@@ -218,11 +247,11 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     if (totalImages > 0) {
       if (windowDoorCount.windows === 0 && windowDoorCount.doors === 0) {
         resultsHtml += `
-          <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Failed to detect windows or doors in ${totalImages} image(s). Please upload clear photos of the house exterior.</p>
+          <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Failed to detect windows or doors in uploaded image(s). Please upload clear photos of the house exterior.</p>
         `;
       } else {
         resultsHtml += `
-          <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Processed ${totalImages} user-uploaded image(s) for window and door detection. Up to 1 image per direction is processed.</p>
+          <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Processed ${Object.values(processedImages).length} user-uploaded image(s) for window and door detection. Up to 1 image per direction is processed.</p>
         `;
       }
     }
@@ -251,7 +280,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       `;
     }
 
-    const smsSummary = `Remodel at ${addressDisplay}: ${measurements.area}sqft, ${windowDoorCount.windows} windows, ${windowDoorCount.doors} doors, ~$${costEstimates.totalCost}. Contact Indy Home Improvements for a detailed quote.`;
+    const smsSummary = `Remodel at ${addressDisplay}: ${measurements.area}sqft, ${windowDoorCount.windows} windows, ${windowDoorCount.doors} doors, ~$${costEstimates.totalCost || "N/A"}. Contact Indy Home Improvements for a detailed quote.`;
     resultsHtml += `
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Next Steps with Indy Home Improvements</h3>
       <p style="margin: 0.5rem 0;">Ready to discuss your project? Contact us directly to request more info or a detailed quote.</p>
@@ -326,4 +355,17 @@ function displayError(message) {
       <p style="margin: 0.5rem 0;">Please try again or contact Indy Home Improvements at <a href="tel:7653663344" style="color: #e67e22; text-decoration: none;">765-366-3344</a> for assistance.</p>
     </div>
   `;
+}
+
+function displayWarning(message) {
+  console.log("Warning:", message);
+  // Optionally display to user (e.g., via a temporary banner)
+  const resultsDiv = document.getElementById("results");
+  if (resultsDiv.innerHTML === "") {
+    resultsDiv.innerHTML = `
+      <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem; text-align: center;" role="alert">
+        <p style="color: #e67e22; margin: 0.5rem 0;">${message}</p>
+      </div>
+    `;
+  }
 }
