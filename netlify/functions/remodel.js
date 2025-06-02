@@ -1,4 +1,5 @@
 const admin = require("firebase-admin");
+const fetch = require("node-fetch");
 
 exports.handler = async (event) => {
   console.log("remodel invoked with event:", JSON.stringify(event));
@@ -17,6 +18,8 @@ exports.handler = async (event) => {
     }
 
     const db = admin.firestore();
+    const storage = admin.storage();
+    const bucket = storage.bucket("turtle-treasure-giveaway.appspot.com");
 
     if (!event.body) {
       throw new Error("Missing request body");
@@ -50,7 +53,7 @@ exports.handler = async (event) => {
 
     const allImages = directions
       .flatMap(direction => photos[direction] || [])
-      .filter(image => image && typeof image === "string");
+      .filter(image => image && typeof image === "string" && image.startsWith("data:image/"));
     console.log(`Processing remodel for address: ${address}, total images received: ${allImages.length}`);
 
     const addressResponse = await fetch(
@@ -64,8 +67,8 @@ exports.handler = async (event) => {
     }
 
     console.log("Address validated:", addressData[0].display_name);
-    const lat = addressData[0].lat;
-    const lon = addressData[0].lon;
+    const lat = parseFloat(addressData[0].lat);
+    const lon = parseFloat(addressData[0].lon);
 
     const buildingData = await getBuildingData(lat, lon);
     const measurements = buildingData.measurements;
@@ -74,7 +77,7 @@ exports.handler = async (event) => {
 
     const windowDoorInfo = windowCount && doorCount
       ? { windows: parseInt(windowCount), doors: parseInt(doorCount), windowSizes: [], doorSizes: [], images: {}, isReliable: true }
-      : await analyzePhotos(photos);
+      : await analyzePhotos(photos, bucket);
 
     const windowDoorCount = {
       windows: windowDoorInfo.windows,
@@ -83,11 +86,22 @@ exports.handler = async (event) => {
       doorSizes: windowDoorInfo.doorSizes,
       isReliable: windowDoorInfo.isReliable,
     };
-    const processedImages = windowDoorInfo.images;
-    console.log("Processed images included in response:", Object.keys(processedImages).length > 0);
+    let processedImages = windowDoorInfo.images;
+    console.log("Raw processedImages:", JSON.stringify(processedImages, null, 2));
+
+    // Validate processedImages to ensure only string URLs
+    const validProcessedImages = {};
+    for (const [direction, url] of Object.entries(processedImages)) {
+      if (typeof url === "string" && url.startsWith("https://")) {
+        validProcessedImages[direction] = url;
+      } else {
+        console.warn(`Skipping invalid URL for ${direction}:`, url);
+      }
+    }
+    processedImages = validProcessedImages;
+    console.log("Validated processedImages:", JSON.stringify(processedImages, null, 2));
 
     const materialEstimates = calculateMaterialEstimates(measurements, windowDoorCount, roofInfo);
-
     const costEstimates = calculateCostEstimates(materialEstimates, windowDoorCount, measurements.area);
     const timelineEstimate = calculateTimeline(measurements.area, windowDoorCount);
 
@@ -125,15 +139,15 @@ exports.handler = async (event) => {
       costEstimates,
       timelineEstimate,
       roofInfo,
-      processedImages,
+      processedImages, // Only valid string URLs
       satelliteImage,
       satelliteImageError,
       lat,
       lon,
-      googleMapsApiKey: GOOGLE_MAPS_API_KEY,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
     };
 
+    console.log("Saving remodel entry to Firestore:", JSON.stringify(remodelEntry, null, 2));
     const docRef = await db.collection("remodels").add(remodelEntry);
     console.log("Remodel entry saved to Firestore with ID:", docRef.id);
 
@@ -152,7 +166,6 @@ exports.handler = async (event) => {
         processedImages,
         satelliteImage,
         satelliteImageError,
-        googleMapsApiKey: GOOGLE_MAPS_API_KEY,
       }),
     };
   } catch (error) {
@@ -166,7 +179,6 @@ exports.handler = async (event) => {
 
 async function getBuildingData(lat, lon) {
   console.log("Fetching building data...");
-
   const overpassQuery = `
     [out:json];
     way["building"](around:50,${lat},${lon});
@@ -180,7 +192,6 @@ async function getBuildingData(lat, lon) {
   const overpassData = await overpassResponse.json();
 
   let isReliable = true;
-
   if (!overpassData.elements.length) {
     console.log("No building found, using fallback dimensions");
     isReliable = false;
@@ -233,7 +244,7 @@ async function getBuildingData(lat, lon) {
   };
 }
 
-async function analyzePhotos(photos) {
+async function analyzePhotos(photos, bucket) {
   console.log("Analyzing photos for windows and doors...");
   if (!photos || Object.keys(photos).length === 0) {
     console.log("No photos provided, using default counts");
@@ -264,25 +275,19 @@ async function analyzePhotos(photos) {
   const processedImages = {};
   let isReliable = false;
 
-  // Process only 1 image per direction to minimize API calls and prevent timeouts
   for (const direction of directions) {
     const images = photos[direction] || [];
     if (images.length === 0) continue;
 
     console.log(`Processing ${images.length} photos for ${direction} direction`);
-    const photosToProcess = images.slice(0, 1); // Limit to 1 per direction to reduce load
+    const photosToProcess = images.slice(0, 1); // Limit to 1 per direction
 
     for (const [index, image] of photosToProcess.entries()) {
       try {
         console.log(`Processing ${direction} photo ${index + 1}/${photosToProcess.length}, image data length: ${image?.length || 0}`);
 
-        if (!image || typeof image !== "string") {
-          console.error(`Invalid image data for ${direction} photo ${index + 1}: Image is null or not a string`);
-          continue;
-        }
-
-        if (!image.startsWith("data:image/")) {
-          console.error(`Invalid image format for ${direction} photo ${index + 1}:`, image.substring(0, 50));
+        if (!image || typeof image !== "string" || !image.startsWith("data:image/")) {
+          console.error(`Invalid image data for ${direction} photo ${index + 1}:`, image?.substring(0, 50));
           continue;
         }
 
@@ -292,26 +297,37 @@ async function analyzePhotos(photos) {
           continue;
         }
 
-        // Skip large images to reduce load
-        if (base64Image.length > 500000) { // ~500KB
+        if (base64Image.length > 500000) {
           console.log(`Skipping ${direction} photo ${index + 1}: Image too large (${base64Image.length} bytes)`);
-          windowCount += 2; // Fallback for skipped image
+          windowCount += 2;
           doorCount += 1;
           windowSizes.push("3ft x 4ft", "3ft x 4ft");
           doorSizes.push("3ft x 7ft");
-          if (!processedImages[direction]) {
-            processedImages[direction] = image;
-          }
           continue;
         }
 
-        if (!processedImages[direction]) {
-          processedImages[direction] = image;
-          console.log(`First valid image captured for ${direction} direction`);
+        const imageBuffer = Buffer.from(base64Image, "base64");
+        const fileName = `remodels/${Date.now()}_${direction}_${index}.jpg`;
+        const file = bucket.file(fileName);
+        await file.save(imageBuffer, {
+          metadata: { contentType: "image/jpeg" },
+        });
+        console.log(`Image uploaded to Firebase Storage: ${fileName}`);
+
+        const [url] = await file.getSignedUrl({
+          action: "read",
+          expires: "03-09-2500",
+        });
+        if (url && typeof url === "string" && url.startsWith("https://")) {
+          processedImages[direction] = url;
+          console.log(`Download URL for ${direction} photo ${index + 1}: ${url}`);
+        } else {
+          console.warn(`Invalid URL generated for ${direction} photo ${index + 1}:`, url);
+          continue;
         }
 
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 3000); // 3-second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // Increased to 5s
 
         console.log(`Making Clarifai API call for ${direction} photo ${index + 1}`);
         const response = await fetch(
@@ -334,7 +350,7 @@ async function analyzePhotos(photos) {
         if (!response.ok) {
           const errorText = await response.text();
           console.error(`Clarifai API error for ${direction} photo ${index + 1}: ${response.status} - ${errorText}`);
-          windowCount += 2; // Fallback on error
+          windowCount += 2;
           doorCount += 1;
           windowSizes.push("3ft x 4ft", "3ft x 4ft");
           doorSizes.push("3ft x 7ft");
@@ -346,7 +362,7 @@ async function analyzePhotos(photos) {
           data = await response.json();
         } catch (jsonError) {
           console.error(`Failed to parse Clarifai response for ${direction} photo ${index + 1}:`, jsonError.message);
-          windowCount += 2; // Fallback on parse error
+          windowCount += 2;
           doorCount += 1;
           windowSizes.push("3ft x 4ft", "3ft x 4ft");
           doorSizes.push("3ft x 7ft");
@@ -355,7 +371,7 @@ async function analyzePhotos(photos) {
 
         if (!data.outputs || !data.outputs[0] || !data.outputs[0].data || !data.outputs[0].data.concepts) {
           console.error(`Unexpected Clarifai response structure for ${direction} photo ${index + 1}:`, JSON.stringify(data));
-          windowCount += 2; // Fallback on invalid response
+          windowCount += 2;
           doorCount += 1;
           windowSizes.push("3ft x 4ft", "3ft x 4ft");
           doorSizes.push("3ft x 7ft");
@@ -377,12 +393,8 @@ async function analyzePhotos(photos) {
         });
         console.log(`${direction} photo ${index + 1} processed: ${windowCount} windows, ${doorCount} doors detected so far`);
       } catch (error) {
-        if (error.name === "AbortError") {
-          console.error(`Clarifai API call timed out for ${direction} photo ${index + 1}`);
-        } else {
-          console.error(`Error processing ${direction} photo ${index + 1}:`, error.message, error.stack);
-        }
-        windowCount += 2; // Fallback on any error
+        console.error(`Error processing ${direction} photo ${index + 1}:`, error.message, error.stack);
+        windowCount += 2;
         doorCount += 1;
         windowSizes.push("3ft x 4ft", "3ft x 4ft");
         doorSizes.push("3ft x 7ft");
