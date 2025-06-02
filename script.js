@@ -32,19 +32,36 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0);
   console.log(`Total images selected: ${totalImages}`);
 
-  // Convert files to base64
+  // Convert files to base64 with enhanced error handling
   let resolvedPhotos;
   try {
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error("Image processing timed out. Please try uploading smaller images.")), 10000);
+    });
+
+    const convertDirection = async (directionFiles, direction) => {
+      const results = [];
+      for (const file of directionFiles) {
+        try {
+          const base64 = await fileToBase64(file);
+          results.push(base64);
+        } catch (error) {
+          throw new Error(`${direction.charAt(0).toUpperCase() + direction.slice(1)} photo: ${error.message}`);
+        }
+      }
+      return results;
+    };
+
     resolvedPhotos = {
-      north: await Promise.all(photos.north.map(file => fileToBase64(file))),
-      south: await Promise.all(photos.south.map(file => fileToBase64(file))),
-      east: await Promise.all(photos.east.map(file => fileToBase64(file))),
-      west: await Promise.all(photos.west.map(file => fileToBase64(file))),
+      north: await Promise.race([convertDirection(photos.north, "north"), timeoutPromise]),
+      south: await Promise.race([convertDirection(photos.south, "south"), timeoutPromise]),
+      east: await Promise.race([convertDirection(photos.east, "east"), timeoutPromise]),
+      west: await Promise.race([convertDirection(photos.west, "west"), timeoutPromise]),
     };
     console.log("Converted photos to base64:", Object.keys(resolvedPhotos).map(dir => `${dir}: ${resolvedPhotos[dir].length}`).join(", "));
   } catch (error) {
-    console.error("Error converting images to base64:", error);
-    displayError("Failed to process uploaded images. Please ensure they are valid image files (JPEG, PNG) and try again.");
+    console.error("Error converting images to base64:", error.message);
+    displayError(`Failed to process uploaded images: ${error.message}. Please ensure they are valid image files (JPEG, PNG) and try again.`);
     submitButton.disabled = false;
     submitButton.innerHTML = "Get Estimate";
     return;
@@ -96,12 +113,13 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const materialEstimates = result.materialEstimates || ["No estimates available"];
     const costEstimates = result.costEstimates || { totalCost: "N/A", costBreakdown: ["No cost breakdown available"] };
     const timelineEstimate = result.timelineEstimate || "N/A";
-    const roofInfo = result.roofInfo || { pitch: "N/A", height: "N/A", roofArea: "N/A", roofMaterial: "N/A", isPitchReliable: false };
+    const roofInfo = result.roofInfo || { pitch: "N/A", height: "N/A", roofArea: "N/A", roofMaterial: "N/A", isPitchReliable: false, pitchSource: "default" };
     const processedImages = result.processedImages || {};
     const satelliteImage = result.satelliteImage || null;
     const satelliteImageError = result.satelliteImageError || null;
     const usedStreetView = result.usedStreetView || false;
     const streetViewStatus = result.streetViewStatus || "not_used";
+    const streetViewRoofPitchStatus = result.streetViewRoofPitchStatus || "not_attempted";
     const lat = result.addressData?.lat || 0;
     const lon = result.addressData?.lon || 0;
 
@@ -124,8 +142,22 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     }
 
     if (!roofInfo.isPitchReliable) {
+      let pitchMessage = "Roof pitch is a default estimate.";
+      if (totalImages > 0) {
+        pitchMessage = "Roof pitch is a default estimate because the uploaded image could not be processed for analysis.";
+      }
+      if (roofInfo.pitchSource === "street_view_failed") {
+        pitchMessage += ` Street View imagery was ${streetViewRoofPitchStatus === "unavailable" ? "not available" : "attempted but failed"} for roof pitch estimation.`;
+      } else if (roofInfo.pitchSource === "satellite_failed") {
+        pitchMessage += " Satellite imagery analysis failed to detect the roof.";
+      }
+      pitchMessage += " Please upload a clear photo showing the roof for a more accurate assessment.";
       resultsHtml += `
-        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Roof pitch is a default estimate. Upload photos for a more accurate assessment.</p>
+        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">${pitchMessage}</p>
+      `;
+    } else {
+      resultsHtml += `
+        <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Roof pitch estimated from ${roofInfo.pitchSource === "user_image" ? "your uploaded photo" : roofInfo.pitchSource === "street_view" ? "Street View imagery" : "satellite imagery"}.</p>
       `;
     }
 
@@ -266,13 +298,17 @@ directions.forEach(direction => {
 
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
-    if (!file.type.startsWith("image/")) {
+    if (!file || !file.type.startsWith("image/")) {
       reject(new Error("Invalid file type. Please upload images (JPEG, PNG)."));
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
       console.log(`Converted file ${file.name} to base64, length: ${reader.result.length}`);
+      if (!reader.result || typeof reader.result !== "string") {
+        reject(new Error(`Failed to convert ${file.name} to base64.`));
+        return;
+      }
       resolve(reader.result);
     };
     reader.onerror = () => {
