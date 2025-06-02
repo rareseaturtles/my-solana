@@ -1,6 +1,10 @@
 document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const address = document.getElementById("address").value;
+  const submitButton = e.target.querySelector("button[type='submit']");
+  submitButton.disabled = true;
+  submitButton.innerHTML = "Processing...";
+
+  const address = document.getElementById("address").value.trim();
   const photos = {
     north: Array.from(document.getElementById("northPhotos").files).map(file => fileToBase64(file)),
     south: Array.from(document.getElementById("southPhotos").files).map(file => fileToBase64(file)),
@@ -10,11 +14,26 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   const windowCount = document.getElementById("windowCount").value || null;
   const doorCount = document.getElementById("doorCount").value || null;
 
+  // Client-side validation
+  if (!address) {
+    displayError("Please enter a valid address.");
+    submitButton.disabled = false;
+    submitButton.innerHTML = "Get Estimate";
+    return;
+  }
+
   const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0);
   console.log(`Sending request with ${totalImages} images:`, Object.keys(photos).map(dir => `${dir}: ${photos[dir].length}`).join(", "));
 
   try {
-    document.getElementById("results").innerHTML = "<p>Loading...</p>";
+    document.getElementById("results").innerHTML = `
+      <div style="text-align: center;">
+        <p>Loading... <span class="spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #e67e22; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></p>
+      </div>
+      <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+      </style>
+    `;
 
     const resolvedPhotos = {
       north: await Promise.all(photos.north),
@@ -66,32 +85,22 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const satelliteImageError = result.satelliteImageError || null;
     const lat = result.addressData?.lat || 0;
     const lon = result.addressData?.lon || 0;
-    const googleMapsApiKey = result.googleMapsApiKey || "";
 
-    // Determine if cost estimate is reliable
     const isCostReliable = isMeasurementsReliable && isWindowDoorCountReliable;
 
-    // Results HTML with updated styling
     let resultsHtml = `
-      <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem;">
+      <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem;" role="region" aria-label="Remodel Estimate Results">
         <h2 style="color: #1a3c34; margin-bottom: 1rem; font-size: 1.8rem; text-align: center;">Remodel Estimate</h2>
         <h3 style="color: #1a3c34; margin-bottom: 0.5rem; font-size: 1.3rem;">Project Overview</h3>
         <p style="margin: 0.5rem 0;"><strong>Address:</strong> ${addressDisplay}</p>
         <p style="margin: 0.5rem 0;"><strong>Dimensions:</strong> ${measurements.width}ft x ${measurements.length}ft (Area: ${measurements.area} sq ft)</p>
         <p style="margin: 0.5rem 0;"><strong>Height (Est.):</strong> ${roofInfo.height}ft | <strong>Roof Pitch:</strong> ${roofInfo.pitch}</p>
         <p style="margin: 0.5rem 0;"><strong>Windows:</strong> ${windowDoorCount.windows} | <strong>Doors:</strong> ${windowDoorCount.doors}</p>
+        <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Material Breakdown</h3>
+        <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
+        <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Cost Estimate (Approximate)</h3>
     `;
 
-    // Material Estimates
-    resultsHtml += `
-      <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Material Breakdown</h3>
-      <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
-    `;
-
-    // Cost Estimate (conditional)
-    resultsHtml += `
-      <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Cost Estimate (Approximate)</h3>
-    `;
     if (isCostReliable) {
       resultsHtml += `
         <p style="margin: 0.5rem 0;"><strong>Total:</strong> $${costEstimates.totalCost}</p>
@@ -104,21 +113,15 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       `;
     }
 
-    // Timeline
     resultsHtml += `
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Estimated Timeline</h3>
       <p style="margin: 0.5rem 0;">${timelineEstimate} weeks</p>
       <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Timeline depends on project scope, weather, and crew availability.</p>
-    `;
-
-    // Permit Information
-    resultsHtml += `
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Permit Information</h3>
       <p style="margin: 0.5rem 0;">Remodeling in Indiana may require permits for structural, electrical, or plumbing work. Contact your local building department.</p>
-      <p style="margin: 0.5rem 0;"><a href="https://www.in.gov/" target="_blank" style="color: #e67e22; text-decoration: none;">Learn More About Indiana Permits</a></p>
+      <p style="margin: 0.5rem 0;"><a href="https://www.in.gov/dhs/building-construction/permits/" target="_blank" style="color: #e67e22; text-decoration: none;">Learn More About Indiana Permits</a></p>
     `;
 
-    // Uploaded Images by Direction
     const directions = ["north", "south", "east", "west"];
     for (const direction of directions) {
       if (processedImages[direction]) {
@@ -131,7 +134,6 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       }
     }
 
-    // Note About Multiple Images
     if (totalImages > 0) {
       if (windowDoorCount.windows === 0 && windowDoorCount.doors === 0) {
         resultsHtml += `
@@ -144,7 +146,6 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       }
     }
 
-    // Satellite Image
     if (satelliteImage) {
       resultsHtml += `
         <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Satellite View (Google Maps)</h3>
@@ -156,49 +157,26 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       resultsHtml += `<p style="color: #d32f2f; text-align: center; margin: 1rem 0;">${satelliteImageError}</p>`;
     }
 
-    // Google Maps Embed (Regular Map with Street View Link)
     if (lat && lon) {
-      if (googleMapsApiKey) {
-        resultsHtml += `
-          <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Location Map (Google Maps)</h3>
-          <div style="text-align: center;">
-            <iframe
-              width="100%"
-              height="200"
-              frameborder="0"
-              style="border: 1px solid #ddd; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin: 1rem 0;"
-              src="https://www.google.com/maps/embed/v1/place?key=${googleMapsApiKey}&q=${lat},${lon}&center=${lat},${lon}&zoom=18"
-              allowfullscreen>
-            </iframe>
-            <p style="font-size: 0.9rem; margin: 0.5rem 0;">
-              <a href="https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lon}&heading=210&pitch=10&fov=90" target="_blank" style="color: #e67e22; text-decoration: none;">
-                Open Street View in New Tab
-              </a>
-              (may not be available for all locations)
-            </p>
-          </div>
-        `;
-      } else {
-        resultsHtml += `
-          <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Location Map (Google Maps)</h3>
-          <p style="color: #d32f2f; text-align: center; margin: 1rem 0;">Location map unavailable: Google Maps API key is missing.</p>
+      resultsHtml += `
+        <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Location Map (Google Maps)</h3>
+        <div style="text-align: center;">
           <p style="text-align: center; margin: 0.5rem 0;">
             <a href="https://www.google.com/maps/search/?api=1&query=${lat},${lon}" target="_blank" style="color: #e67e22; text-decoration: none;">
               View on Google Maps
             </a>
           </p>
-        `;
-      }
+        </div>
+      `;
     }
 
-    // Contact Us Button with Detailed Info
-    const smsSummary = `Remodel at ${addressDisplay}: ${measurements.area}sqft, ${windowDoorCount.windows} windows, ${windowDoorCount.doors} doors, ~$${costEstimates.totalCost}. Details: https://indyhomeimprovements.com/remodel-details/${remodelId}`;
+    const smsSummary = `Remodel at ${addressDisplay}: ${measurements.area}sqft, ${windowDoorCount.windows} windows, ${windowDoorCount.doors} doors, ~$${costEstimates.totalCost}. Contact Indy Home Improvements for a detailed quote.`;
     resultsHtml += `
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Next Steps with Indy Home Improvements</h3>
       <p style="margin: 0.5rem 0;">Ready to discuss your project? Contact us directly to request more info or a detailed quote.</p>
       <p style="font-size: 0.9rem; color: #666; margin: 0.5rem 0;">By clicking below, you agree to send an SMS to Indy Home Improvements at 765-366-3344. Standard messaging rates may apply. We will not share your phone number. Reply STOP to opt out.</p>
       <div style="text-align: center; margin: 1rem 0;">
-        <a href="sms:7653663344?body=${encodeURIComponent(smsSummary)}" style="display: inline-block; padding: 0.75rem 1.5rem; background-color: #e67e22; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; transition: background-color 0.3s;">Contact Us</a>
+        <a href="sms:7653663344?body=${encodeURIComponent(smsSummary)}" style="display: inline-block; padding: 0.75rem 1.5rem; background-color: #e67e22; color: white; text-decoration: none; border-radius: 4px; font-weight: bold; transition: background-color 0.3s;" aria-label="Contact Indy Home Improvements via SMS">Contact Us</a>
       </div>
     </div>
     `;
@@ -206,16 +184,13 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     document.getElementById("results").innerHTML = resultsHtml;
   } catch (error) {
     console.error("Fetch error:", error);
-    document.getElementById("results").innerHTML = `
-      <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem; text-align: center;">
-        <p style="color: #d32f2f; margin: 0.5rem 0;">Error: ${error.message}</p>
-        <p style="margin: 0.5rem 0;">Please try again or contact Indy Home Improvements at 765-366-3344 for assistance.</p>
-      </div>
-    `;
+    displayError(`Error: ${error.message}`);
+  } finally {
+    submitButton.disabled = false;
+    submitButton.innerHTML = "Get Estimate";
   }
 });
 
-// Add preview for each direction
 const directions = ["north", "south", "east", "west"];
 directions.forEach(direction => {
   document.getElementById(`${direction}Photos`).addEventListener("change", (e) => {
@@ -224,24 +199,43 @@ directions.forEach(direction => {
     const files = Array.from(e.target.files);
     console.log(`Selected ${files.length} files for ${direction} direction`);
     files.forEach(file => {
+      if (!file.type.startsWith("image/")) {
+        displayError(`Invalid file type for ${direction} photo. Please upload images (JPEG, PNG).`);
+        return;
+      }
       const img = document.createElement("img");
       img.src = URL.createObjectURL(file);
       img.style.maxWidth = "150px";
       img.style.borderRadius = "4px";
       img.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
       img.style.margin = "5px";
+      img.alt = `${direction} preview image`;
       preview.appendChild(img);
     });
   });
 });
 
 function fileToBase64(file) {
-  return new Promise(resolve => {
+  return new Promise((resolve, reject) => {
+    if (!file.type.startsWith("image/")) {
+      reject(new Error("Invalid file type. Please upload images (JPEG, PNG)."));
+      return;
+    }
     const reader = new FileReader();
     reader.onload = () => {
       console.log(`Converted file to base64, length: ${reader.result.length}`);
       resolve(reader.result);
     };
+    reader.onerror = () => reject(new Error("Failed to read file."));
     reader.readAsDataURL(file);
   });
+}
+
+function displayError(message) {
+  document.getElementById("results").innerHTML = `
+    <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem; text-align: center;" role="alert">
+      <p style="color: #d32f2f; margin: 0.5rem 0;">${message}</p>
+      <p style="margin: 0.5rem 0;">Please try again or contact Indy Home Improvements at <a href="tel:7653663344" style="color: #e67e22; text-decoration: none;">765-366-3344</a> for assistance.</p>
+    </div>
+  `;
 }
