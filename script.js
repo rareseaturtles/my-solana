@@ -1,3 +1,35 @@
+document.getElementById("windowCount").addEventListener("input", (e) => {
+  const count = parseInt(e.target.value) || 0;
+  const windowSizesDiv = document.getElementById("windowSizes");
+  windowSizesDiv.innerHTML = "";
+  for (let i = 0; i < count; i++) {
+    windowSizesDiv.innerHTML += `
+      <div style="margin-bottom: 10px;">
+        <label>Window ${i + 1} Size (Width x Height in feet):</label>
+        <input type="number" step="0.1" min="0" id="windowWidth${i}" placeholder="Width (e.g., 3)" style="width: 80px;" required>
+        <span> x </span>
+        <input type="number" step="0.1" min="0" id="windowHeight${i}" placeholder="Height (e.g., 4)" style="width: 80px;" required>
+      </div>
+    `;
+  }
+});
+
+document.getElementById("doorCount").addEventListener("input", (e) => {
+  const count = parseInt(e.target.value) || 0;
+  const doorSizesDiv = document.getElementById("doorSizes");
+  doorSizesDiv.innerHTML = "";
+  for (let i = 0; i < count; i++) {
+    doorSizesDiv.innerHTML += `
+      <div style="margin-bottom: 10px;">
+        <label>Door ${i + 1} Size (Width x Height in feet):</label>
+        <input type="number" step="0.1" min="0" id="doorWidth${i}" placeholder="Width (e.g., 3)" style="width: 80px;" required>
+        <span> x </span>
+        <input type="number" step="0.1" min="0" id="doorHeight${i}" placeholder="Height (e.g., 7)" style="width: 80px;" required>
+      </div>
+    `;
+  }
+});
+
 document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const submitButton = e.target.querySelector("button[type='submit']");
@@ -11,8 +43,44 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     east: Array.from(document.getElementById("eastPhotos").files),
     west: Array.from(document.getElementById("westPhotos").files),
   };
-  const windowCount = document.getElementById("windowCount").value || null;
-  const doorCount = document.getElementById("doorCount").value || null;
+  const retryPhotos = {
+    north: Array.from(document.getElementById("northRetryPhotos")?.files || []),
+    south: Array.from(document.getElementById("southRetryPhotos")?.files || []),
+    east: Array.from(document.getElementById("eastRetryPhotos")?.files || []),
+    west: Array.from(document.getElementById("westRetryPhotos")?.files || []),
+  };
+  const windowCount = parseInt(document.getElementById("windowCount").value) || null;
+  const doorCount = parseInt(document.getElementById("doorCount").value) || null;
+
+  const windowSizes = [];
+  if (windowCount) {
+    for (let i = 0; i < windowCount; i++) {
+      const width = parseFloat(document.getElementById(`windowWidth${i}`).value);
+      const height = parseFloat(document.getElementById(`windowHeight${i}`).value);
+      if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
+        displayError(`Please provide valid dimensions for Window ${i + 1}.`);
+        submitButton.disabled = false;
+        submitButton.innerHTML = "Get Estimate";
+        return;
+      }
+      windowSizes.push(`${width}ft x ${height}ft`);
+    }
+  }
+
+  const doorSizes = [];
+  if (doorCount) {
+    for (let i = 0; i < doorCount; i++) {
+      const width = parseFloat(document.getElementById(`doorWidth${i}`).value);
+      const height = parseFloat(document.getElementById(`doorHeight${i}`).value);
+      if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
+        displayError(`Please provide valid dimensions for Door ${i + 1}.`);
+        submitButton.disabled = false;
+        submitButton.innerHTML = "Get Estimate";
+        return;
+      }
+      doorSizes.push(`${width}ft x ${height}ft`);
+    }
+  }
 
   if (!address) {
     displayError("Please enter a valid address.");
@@ -27,6 +95,12 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     east: photos.east.map(file => file.name),
     west: photos.west.map(file => file.name),
   });
+  console.log("Retry photo inputs:", {
+    north: retryPhotos.north.map(file => file.name),
+    south: retryPhotos.south.map(file => file.name),
+    east: retryPhotos.east.map(file => file.name),
+    west: retryPhotos.west.map(file => file.name),
+  });
 
   const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0);
   console.log(`Total images selected: ${totalImages}`);
@@ -36,9 +110,10 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     if (photos[direction].length > 1) {
       displayWarning(`Multiple images uploaded for ${direction}. Only the first image will be processed for analysis, but all images will be saved.`);
     }
+    document.getElementById(`${direction}Retry`).style.display = "none"; // Reset retry prompts
   }
 
-  let resolvedPhotos;
+  let resolvedPhotos, resolvedRetryPhotos;
   try {
     const timeoutPromise = new Promise((_, reject) => {
       setTimeout(() => reject(new Error("Image processing timed out. Please try uploading smaller images.")), 10000);
@@ -48,7 +123,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       const results = [];
       for (const file of directionFiles) {
         try {
-          if (file.size > 500 * 1024) { // 500KB limit
+          if (file.size > 500 * 1024) {
             throw new Error(`Image ${file.name} exceeds 500KB. Please upload a smaller image.`);
           }
           const base64 = await fileToBase64(file);
@@ -67,7 +142,16 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       east: await Promise.race([convertDirection(photos.east, "east"), timeoutPromise]),
       west: await Promise.race([convertDirection(photos.west, "west"), timeoutPromise]),
     };
+
+    resolvedRetryPhotos = {
+      north: await Promise.race([convertDirection(retryPhotos.north, "northRetry"), timeoutPromise]),
+      south: await Promise.race([convertDirection(retryPhotos.south, "southRetry"), timeoutPromise]),
+      east: await Promise.race([convertDirection(retryPhotos.east, "eastRetry"), timeoutPromise]),
+      west: await Promise.race([convertDirection(retryPhotos.west, "westRetry"), timeoutPromise]),
+    };
+
     console.log("Converted photos to base64:", Object.keys(resolvedPhotos).map(dir => `${dir}: ${resolvedPhotos[dir].length}`).join(", "));
+    console.log("Converted retry photos to base64:", Object.keys(resolvedRetryPhotos).map(dir => `${dir}: ${resolvedRetryPhotos[dir].length}`).join(", "));
   } catch (error) {
     console.error("Error converting images to base64:", error.message);
     displayError(`Failed to process uploaded images: ${error.message}. Please ensure they are valid image files (JPEG, PNG) and try again.`);
@@ -86,14 +170,17 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       </style>
     `;
 
-    console.log("Sending request to /.netlify/functions/remodel with data:", { address, photos: resolvedPhotos, windowCount, doorCount });
+    console.log("Sending request to /.netlify/functions/remodel with data:", { address, photos: resolvedPhotos, retryPhotos: resolvedRetryPhotos, windowCount, doorCount, windowSizes, doorSizes });
     const response = await fetch("/.netlify/functions/remodel", {
       method: "POST",
       body: JSON.stringify({
         address,
         photos: resolvedPhotos,
+        retryPhotos: resolvedRetryPhotos,
         windowCount,
         doorCount,
+        windowSizes,
+        doorSizes,
       }),
     });
     console.log("Response status:", response.status);
@@ -112,6 +199,16 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     }
 
     if (result.error) throw new Error(result.error);
+
+    if (result.retryDirections && result.retryDirections.length > 0) {
+      result.retryDirections.forEach(direction => {
+        document.getElementById(`${direction}Retry`).style.display = "block";
+      });
+      displayError("Failed to detect windows or doors in some images. Please upload closer photos as requested and resubmit.");
+      submitButton.disabled = false;
+      submitButton.innerHTML = "Get Estimate";
+      return;
+    }
 
     const remodelId = result.remodelId || "unknown";
     const addressDisplay = result.addressData?.display_name || "Unknown Address";
@@ -188,7 +285,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
     if (!isWindowDoorCountReliable && !windowCount && !doorCount) {
       resultsHtml += `
-        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Window and door counts are estimates due to lack of clear images or manual input. Please upload photos or provide counts for better accuracy.</p>
+        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Window and door counts are estimates based on manual input or Street View. For better accuracy, provide counts or upload clear photos.</p>
       `;
     }
 
@@ -211,7 +308,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       }
     } else {
       resultsHtml += `
-        <p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable because both building dimensions and window/door counts are unreliable. Please provide manual counts or upload clear photos of the house exterior.</p>
+        <p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable because both building dimensions and window/door counts are unreliable. Please provide manual counts and sizes or upload clear photos of the house exterior.</p>
       `;
     }
 
@@ -246,9 +343,9 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     }
 
     if (totalImages > 0) {
-      if (windowDoorCount.windows === 0 && windowDoorCount.doors === 0) {
+      if (windowDoorCount.windows === 0 && windowDoorCount.doors === 0 && !windowCount && !doorCount) {
         resultsHtml += `
-          <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Failed to detect windows or doors in uploaded image(s). Please upload clear photos of the house exterior.</p>
+          <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Failed to detect windows or doors in uploaded image(s). Please upload clear photos of the house exterior or provide manual counts and sizes.</p>
         `;
       } else {
         resultsHtml += `
@@ -304,7 +401,6 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
 const directions = ["north", "south", "east", "west"];
 directions.forEach(direction => {
-  // File input change handler
   document.getElementById(`${direction}Photos`).addEventListener("change", (e) => {
     const preview = document.getElementById(`${direction}Preview`);
     preview.innerHTML = "";
@@ -326,7 +422,30 @@ directions.forEach(direction => {
     });
   });
 
-  // Camera capture handler
+  const retryInput = document.getElementById(`${direction}RetryPhotos`);
+  if (retryInput) {
+    retryInput.addEventListener("change", (e) => {
+      const preview = document.getElementById(`${direction}RetryPreview`);
+      preview.innerHTML = "";
+      const files = Array.from(e.target.files);
+      console.log(`Selected ${files.length} retry files for ${direction} direction:`, files.map(file => file.name));
+      files.forEach(file => {
+        if (!file.type.startsWith("image/")) {
+          displayError(`Invalid file type for ${direction} retry photo. Please upload images (JPEG, PNG).`);
+          return;
+        }
+        const img = document.createElement("img");
+        img.src = URL.createObjectURL(file);
+        img.style.maxWidth = "150px";
+        img.style.borderRadius = "4px";
+        img.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
+        img.style.margin = "5px";
+        img.alt = `${direction} retry preview image`;
+        preview.appendChild(img);
+      });
+    });
+  }
+
   document.getElementById(`capture${direction.charAt(0).toUpperCase() + direction.slice(1)}`).addEventListener("click", async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
