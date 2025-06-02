@@ -93,7 +93,7 @@ exports.handler = async (event) => {
         windowSizes: Array(windows).fill("3ft x 4ft"),
         doorSizes: Array(doors).fill("3ft x 7ft"),
         images: {},
-        isReliable: true, // Manual input is considered reliable
+        isReliable: true,
       };
       console.log(`Using manual window/door counts: ${windowDoorInfo.windows} windows, ${windowDoorInfo.doors} doors`);
     } else {
@@ -362,7 +362,8 @@ async function estimateRoofPitchFromImage(base64Image, source) {
 
       if (roofDetected) {
         const steepnessScore = objects.find(obj => obj.name.toLowerCase().includes("roof"))?.score || 0;
-        pitch = steepnessScore > 0.6 ? "8/12" : steepnessScore > 0.3 ? "6/12" : "4/12"; // Adjusted thresholds
+        console.log(`Google Vision API roof detection confidence: ${steepnessScore}`);
+        pitch = steepnessScore > 0.6 ? "8/12" : steepnessScore > 0.3 ? "6/12" : "4/12";
         isPitchReliable = true;
         pitchSource = source;
         console.log(`Estimated roof pitch using Vision API from ${source}: ${pitch}`);
@@ -402,7 +403,8 @@ async function estimateRoofPitchFromImage(base64Image, source) {
       if (roofDetected) {
         const roofConcept = concepts.find(concept => concept.name.toLowerCase().includes("roof"));
         const confidence = roofConcept?.value || 0;
-        pitch = confidence > 0.6 ? "8/12" : confidence > 0.3 ? "6/12" : "4/12"; // Adjusted thresholds
+        console.log(`Clarifai roof detection confidence: ${confidence}`);
+        pitch = confidence > 0.6 ? "8/12" : confidence > 0.3 ? "6/12" : "4/12";
         isPitchReliable = true;
         pitchSource = source;
         console.log(`Estimated roof pitch using Clarifai from ${source}: ${pitch}`);
@@ -427,7 +429,6 @@ async function getRoofInfo(lat, lon, baseRoofInfo, userPhotos, streetViewImages,
     .flatMap(direction => userPhotos[direction] || [])
     .filter(image => image && typeof image === "string" && image.startsWith("data:image/"));
 
-  // Step 1: Try user-uploaded images
   if (allUserImages.length > 0) {
     for (const [index, image] of allUserImages.entries()) {
       try {
@@ -450,7 +451,6 @@ async function getRoofInfo(lat, lon, baseRoofInfo, userPhotos, streetViewImages,
     }
   }
 
-  // Step 2: Try Street View images if user images fail
   if (!isPitchReliable && Object.keys(streetViewImages).length > 0) {
     for (const direction of directions) {
       const url = streetViewImages[direction];
@@ -477,7 +477,6 @@ async function getRoofInfo(lat, lon, baseRoofInfo, userPhotos, streetViewImages,
     }
   }
 
-  // Step 3: Try satellite imagery if both user images and Street View fail
   if (!isPitchReliable && apiKey) {
     const satelliteUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=18&size=600x400&maptype=satellite&key=${apiKey}`;
     let imageBuffer;
@@ -501,14 +500,13 @@ async function getRoofInfo(lat, lon, baseRoofInfo, userPhotos, streetViewImages,
     }
   }
 
-  // Update pitch factor based on the new pitch
   const pitchValues = {
     "4/12": 1.054,
     "6/12": 1.118,
     "8/12": 1.202,
   };
   const pitchFactor = pitchValues[pitch] || 1.118;
-  roofArea = baseRoofInfo.roofArea * (pitchFactor / 1.118); // Adjust roof area based on new pitch
+  roofArea = baseRoofInfo.roofArea * (pitchFactor / 1.118);
 
   return { pitch, height, roofArea: Math.round(roofArea), roofMaterial, isPitchReliable, pitchSource, streetViewRoofPitchStatus };
 }
@@ -541,7 +539,6 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
   const allUploadedImages = {};
   let isReliable = false;
 
-  // Process user-uploaded images
   for (const direction of directions) {
     const images = photos[direction] || [];
     if (images.length === 0) continue;
@@ -591,7 +588,7 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
     const photosToProcess = images.slice(0, 1);
     for (const [index, image] of photosToProcess.entries()) {
       try {
-        console.log(`Analyzing ${direction} user photo ${index + 1}/${photosToProcess.length}, image data length: ${image?.length || 0}`);
+        console.log(`Analyzing ${direction} user photo ${index + 1}/${photosToProcess.length}`);
 
         if (!image || typeof image !== "string" || !image.startsWith("data:image/")) {
           console.error(`Invalid image data for ${direction} photo ${index + 1}:`, image?.substring(0, 50));
@@ -613,7 +610,6 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
           continue;
         }
 
-        // Use the URL of the first image for display
         processedImages[direction] = allUploadedImages[direction][0];
 
         const controller = new AbortController();
@@ -658,15 +654,17 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
 
         isReliable = true;
         data.outputs[0].data.concepts.forEach(concept => {
-          if (concept.name.toLowerCase().includes("window")) {
+          if (concept.name.toLowerCase().includes("window") && concept.value > 0.5) { // Lowered threshold
             windowCount++;
-            const size = concept.value > 0.8 ? "4ft x 5ft" : "3ft x 4ft"; // Adjusted threshold
+            const size = concept.value > 0.7 ? "4ft x 5ft" : "3ft x 4ft";
             windowSizes.push(size);
+            console.log(`Detected window in ${direction} photo ${index + 1}, confidence: ${concept.value}`);
           }
-          if (concept.name.toLowerCase().includes("door")) {
+          if (concept.name.toLowerCase().includes("door") && concept.value > 0.5) {
             doorCount++;
-            const size = concept.value > 0.8 ? "3ft x 8ft" : "3ft x 7ft";
+            const size = concept.value > 0.7 ? "3ft x 8ft" : "3ft x 7ft";
             doorSizes.push(size);
+            console.log(`Detected door in ${direction} photo ${index + 1}, confidence: ${concept.value}`);
           }
         });
         console.log(`${direction} photo ${index + 1} processed: ${windowCount} windows, ${doorCount} doors detected so far`);
@@ -681,7 +679,6 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
     }
   }
 
-  // Process Street View images if no user images
   if (allImages.length === 0) {
     for (const direction of directions) {
       const url = streetViewImages[direction];
@@ -735,15 +732,17 @@ async function analyzePhotos(photos, streetViewImages, bucket) {
 
         isReliable = true;
         data.outputs[0].data.concepts.forEach(concept => {
-          if (concept.name.toLowerCase().includes("window")) {
+          if (concept.name.toLowerCase().includes("window") && concept.value > 0.5) {
             windowCount++;
-            const size = concept.value > 0.8 ? "4ft x 5ft" : "3ft x 4ft";
+            const size = concept.value > 0.7 ? "4ft x 5ft" : "3ft x 4ft";
             windowSizes.push(size);
+            console.log(`Detected window in ${direction} Street View, confidence: ${concept.value}`);
           }
-          if (concept.name.toLowerCase().includes("door")) {
+          if (concept.name.toLowerCase().includes("door") && concept.value > 0.5) {
             doorCount++;
-            const size = concept.value > 0.8 ? "3ft x 8ft" : "3ft x 7ft";
+            const size = concept.value > 0.7 ? "3ft x 8ft" : "3ft x 7ft";
             doorSizes.push(size);
+            console.log(`Detected door in ${direction} Street View, confidence: ${concept.value}`);
           }
         });
         console.log(`${direction} Street View processed: ${windowCount} windows, ${doorCount} doors detected so far`);
