@@ -14,7 +14,6 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   const windowCount = document.getElementById("windowCount").value || null;
   const doorCount = document.getElementById("doorCount").value || null;
 
-  // Client-side validation
   if (!address) {
     displayError("Please enter a valid address.");
     submitButton.disabled = false;
@@ -69,7 +68,6 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
     if (result.error) throw new Error(result.error);
 
-    // Extract data with fallbacks
     const remodelId = result.remodelId || "unknown";
     const addressDisplay = result.addressData?.display_name || "Unknown Address";
     const measurements = result.measurements || { width: "N/A", length: "N/A", area: "N/A" };
@@ -83,6 +81,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const processedImages = result.processedImages || {};
     const satelliteImage = result.satelliteImage || null;
     const satelliteImageError = result.satelliteImageError || null;
+    const usedStreetView = result.usedStreetView || false;
     const lat = result.addressData?.lat || 0;
     const lon = result.addressData?.lon || 0;
 
@@ -96,9 +95,24 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
         <p style="margin: 0.5rem 0;"><strong>Dimensions:</strong> ${measurements.width}ft x ${measurements.length}ft (Area: ${measurements.area} sq ft)</p>
         <p style="margin: 0.5rem 0;"><strong>Height (Est.):</strong> ${roofInfo.height}ft | <strong>Roof Pitch:</strong> ${roofInfo.pitch}</p>
         <p style="margin: 0.5rem 0;"><strong>Windows:</strong> ${windowDoorCount.windows} | <strong>Doors:</strong> ${windowDoorCount.doors}</p>
-        <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Material Breakdown</h3>
-        <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
-        <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Cost Estimate (Approximate)</h3>
+    `;
+
+    if (!isMeasurementsReliable) {
+      resultsHtml += `
+        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Building dimensions are estimates due to limited data. For accurate results, upload photos or provide window/door counts.</p>
+      `;
+    }
+
+    if (usedStreetView) {
+      resultsHtml += `
+        <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Used Google Street View images for window and door detection due to no user-uploaded photos.</p>
+      `;
+    }
+
+    resultsHtml += `
+      <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Material Breakdown</h3>
+      <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
+      <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Cost Estimate (Approximate)</h3>
     `;
 
     if (isCostReliable) {
@@ -141,7 +155,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
         `;
       } else {
         resultsHtml += `
-          <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Processed ${totalImages} image(s) for window and door detection. Up to 1 image per direction is processed.</p>
+          <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Processed ${totalImages} user-uploaded image(s) for window and door detection. Up to 1 image per direction is processed.</p>
         `;
       }
     }
