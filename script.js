@@ -6,10 +6,10 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
   const address = document.getElementById("address").value.trim();
   const photos = {
-    north: Array.from(document.getElementById("northPhotos").files).map(file => fileToBase64(file)),
-    south: Array.from(document.getElementById("southPhotos").files).map(file => fileToBase64(file)),
-    east: Array.from(document.getElementById("eastPhotos").files).map(file => fileToBase64(file)),
-    west: Array.from(document.getElementById("westPhotos").files).map(file => fileToBase64(file)),
+    north: Array.from(document.getElementById("northPhotos").files),
+    south: Array.from(document.getElementById("southPhotos").files),
+    east: Array.from(document.getElementById("eastPhotos").files),
+    west: Array.from(document.getElementById("westPhotos").files),
   };
   const windowCount = document.getElementById("windowCount").value || null;
   const doorCount = document.getElementById("doorCount").value || null;
@@ -21,8 +21,34 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     return;
   }
 
+  // Debug: Log raw file inputs
+  console.log("Raw photo inputs:", {
+    north: photos.north.map(file => file.name),
+    south: photos.south.map(file => file.name),
+    east: photos.east.map(file => file.name),
+    west: photos.west.map(file => file.name),
+  });
+
   const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0);
-  console.log(`Sending request with ${totalImages} images:`, Object.keys(photos).map(dir => `${dir}: ${photos[dir].length}`).join(", "));
+  console.log(`Total images selected: ${totalImages}`);
+
+  // Convert files to base64
+  let resolvedPhotos;
+  try {
+    resolvedPhotos = {
+      north: await Promise.all(photos.north.map(file => fileToBase64(file))),
+      south: await Promise.all(photos.south.map(file => fileToBase64(file))),
+      east: await Promise.all(photos.east.map(file => fileToBase64(file))),
+      west: await Promise.all(photos.west.map(file => fileToBase64(file))),
+    };
+    console.log("Converted photos to base64:", Object.keys(resolvedPhotos).map(dir => `${dir}: ${resolvedPhotos[dir].length}`).join(", "));
+  } catch (error) {
+    console.error("Error converting images to base64:", error);
+    displayError("Failed to process uploaded images. Please ensure they are valid image files (JPEG, PNG) and try again.");
+    submitButton.disabled = false;
+    submitButton.innerHTML = "Get Estimate";
+    return;
+  }
 
   try {
     document.getElementById("results").innerHTML = `
@@ -33,13 +59,6 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
         @keyframes spin { to { transform: rotate(360deg); } }
       </style>
     `;
-
-    const resolvedPhotos = {
-      north: await Promise.all(photos.north),
-      south: await Promise.all(photos.south),
-      east: await Promise.all(photos.east),
-      west: await Promise.all(photos.west),
-    };
 
     console.log("Sending request to /.netlify/functions/remodel with data:", { address, photos: resolvedPhotos, windowCount, doorCount });
     const response = await fetch("/.netlify/functions/remodel", {
@@ -77,11 +96,12 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const materialEstimates = result.materialEstimates || ["No estimates available"];
     const costEstimates = result.costEstimates || { totalCost: "N/A", costBreakdown: ["No cost breakdown available"] };
     const timelineEstimate = result.timelineEstimate || "N/A";
-    const roofInfo = result.roofInfo || { pitch: "N/A", height: "N/A", roofArea: "N/A", roofMaterial: "N/A" };
+    const roofInfo = result.roofInfo || { pitch: "N/A", height: "N/A", roofArea: "N/A", roofMaterial: "N/A", isPitchReliable: false };
     const processedImages = result.processedImages || {};
     const satelliteImage = result.satelliteImage || null;
     const satelliteImageError = result.satelliteImageError || null;
     const usedStreetView = result.usedStreetView || false;
+    const streetViewStatus = result.streetViewStatus || "not_used";
     const lat = result.addressData?.lat || 0;
     const lon = result.addressData?.lon || 0;
 
@@ -103,10 +123,25 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       `;
     }
 
-    if (usedStreetView) {
+    if (!roofInfo.isPitchReliable) {
       resultsHtml += `
-        <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Used Google Street View images for window and door detection due to no user-uploaded photos.</p>
+        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Roof pitch is a default estimate. Upload photos for a more accurate assessment.</p>
       `;
+    }
+
+    if (usedStreetView) {
+      if (streetViewStatus === "success") {
+        resultsHtml += `
+          <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Used Google Street View images for window and door detection due to no user-uploaded photos.</p>
+        `;
+      } else {
+        let reason = streetViewStatus === "unavailable" ? "Street View imagery is not available for this location." :
+                     streetViewStatus === "api_key_missing" ? "Google Maps API key is missing." :
+                     "Failed to fetch Street View imagery.";
+        resultsHtml += `
+          <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">${reason} Default window/door counts were used. Please upload photos for better accuracy.</p>
+        `;
+      }
     }
 
     resultsHtml += `
@@ -211,7 +246,7 @@ directions.forEach(direction => {
     const preview = document.getElementById(`${direction}Preview`);
     preview.innerHTML = "";
     const files = Array.from(e.target.files);
-    console.log(`Selected ${files.length} files for ${direction} direction`);
+    console.log(`Selected ${files.length} files for ${direction} direction:`, files.map(file => file.name));
     files.forEach(file => {
       if (!file.type.startsWith("image/")) {
         displayError(`Invalid file type for ${direction} photo. Please upload images (JPEG, PNG).`);
@@ -237,10 +272,13 @@ function fileToBase64(file) {
     }
     const reader = new FileReader();
     reader.onload = () => {
-      console.log(`Converted file to base64, length: ${reader.result.length}`);
+      console.log(`Converted file ${file.name} to base64, length: ${reader.result.length}`);
       resolve(reader.result);
     };
-    reader.onerror = () => reject(new Error("Failed to read file."));
+    reader.onerror = () => {
+      console.error(`Failed to read file ${file.name}`);
+      reject(new Error(`Failed to read file ${file.name}.`));
+    };
     reader.readAsDataURL(file);
   });
 }
