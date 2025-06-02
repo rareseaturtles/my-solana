@@ -4,6 +4,7 @@ const cv = require("opencv4nodejs");
 
 exports.handler = async (event) => {
   try {
+    // Initialize Firebase Admin
     if (!admin.apps.length) {
       admin.initializeApp({
         credential: admin.credential.cert({
@@ -18,6 +19,7 @@ exports.handler = async (event) => {
     const storage = admin.storage();
     const bucket = storage.bucket("turtle-treasure-giveaway.appspot.com");
 
+    // Validate request body
     if (!event.body) {
       throw new Error("Missing request body");
     }
@@ -35,6 +37,7 @@ exports.handler = async (event) => {
       throw new Error("Missing address in request body");
     }
 
+    // Validate photo arrays
     const directions = ["north", "south", "east", "west"];
     for (const direction of directions) {
       if (photos[direction] && !Array.isArray(photos[direction])) {
@@ -52,10 +55,11 @@ exports.handler = async (event) => {
       .flatMap(direction => (retryPhotos && retryPhotos[direction]) || [])
       .filter(image => image && typeof image === "string" && image.startsWith("data:image/"));
 
-    if (allImages.length < 4 && allRetryImages.length < 4) {
-      throw new Error("Please upload at least one photo for each direction (north, south, east, west)");
+    if (allImages.length < 4 && allRetryImages.length < 4 && windowCount === null && doorCount === null) {
+      throw new Error("Please upload at least one photo for each direction (north, south, east, west) or provide window and door counts");
     }
 
+    // Validate address using OpenStreetMap
     const addressResponse = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
       { headers: { "User-Agent": "IndyHomeImprovements/1.0" } }
@@ -75,10 +79,10 @@ exports.handler = async (event) => {
     // Get building data from user images
     const buildingData = await getBuildingDataFromUserImages(photos, retryPhotos, bucket);
     const measurements = buildingData.measurements;
-
     const roofInfo = buildingData.roofInfo;
     const isMeasurementsReliable = buildingData.isReliable;
 
+    // Analyze windows and doors
     let windowDoorInfo;
     if (windowCount !== null && doorCount !== null && windowSizes && doorSizes) {
       windowDoorInfo = {
@@ -87,6 +91,7 @@ exports.handler = async (event) => {
         windowSizes: windowSizes,
         doorSizes: doorSizes,
         images: {},
+        allUploadedImages: {},
         isReliable: true,
       };
     } else {
@@ -120,16 +125,19 @@ exports.handler = async (event) => {
     let processedImages = windowDoorInfo.images || {};
     const allUploadedImages = windowDoorInfo.allUploadedImages || {};
 
+    // Clean up undefined processed images
     for (const direction of directions) {
       if (processedImages[direction] === undefined) {
         delete processedImages[direction];
       }
     }
 
+    // Calculate estimates
     const materialEstimates = calculateMaterialEstimates(measurements, windowDoorCount, roofInfo);
-    const costEstimates = calculateCostEstimates(materialEstimates, windowDoorCount, measurements.area);
+    const costEstimates = calculateCostEstimates(materialEstimates, windowDoorCount, measurements.area, addressData);
     const timelineEstimate = calculateTimeline(measurements.area, windowDoorCount);
 
+    // Save to Firestore
     const remodelEntry = {
       address: addressData[0].display_name,
       measurements,
@@ -170,6 +178,31 @@ exports.handler = async (event) => {
     };
   }
 };
+
+// Helper function to determine location-based cost multiplier
+function getLocationMultiplier(addressData) {
+  const address = addressData[0]?.display_name?.toLowerCase() || "";
+  let multiplierLow = 0.9;
+  let multiplierHigh = 1.1;
+
+  // State-based multiplier (extendable with ZIP code API for precision)
+  if (address.includes("california") || address.includes("new york")) {
+    multiplierLow = 1.2;
+    multiplierHigh = 1.4;
+  } else if (address.includes("indiana") || address.includes("ohio")) {
+    multiplierLow = 0.9;
+    multiplierHigh = 1.1;
+  } else if (address.includes("texas") || address.includes("florida")) {
+    multiplierLow = 1.0;
+    multiplierHigh = 1.2;
+  } else {
+    // Default for rural or unspecified areas
+    multiplierLow = 0.8;
+    multiplierHigh = 0.95;
+  }
+
+  return { multiplierLow, multiplierHigh };
+}
 
 async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
   const directions = ["north", "south", "east", "west"];
@@ -294,7 +327,7 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
 
   return {
     measurements: { width, length, area },
-    roofInfo: { pitch, height: Math.round(height), roofArea: Math.round(roofArea), roofMaterial },
+    roofInfo: { pitch, height: Math.round(height), roofArea: Math.round(roofArea), roofMaterial, isPitchReliable: !!roofImage, pitchSource: roofImage ? "user_image" : "default" },
     isReliable,
   };
 }
@@ -305,7 +338,16 @@ async function analyzePhotosWithGoogleVision(photos, retryPhotos, bucket) {
   const allRetryImages = directions.flatMap(direction => (retryPhotos && retryPhotos[direction]) || []);
 
   if (allImages.length < 4 && allRetryImages.length < 4) {
-    throw new Error("Please upload at least one photo for each direction (north, south, east, west)");
+    return {
+      windows: 0,
+      doors: 0,
+      windowSizes: [],
+      doorSizes: [],
+      images: {},
+      allUploadedImages: {},
+      isReliable: false,
+      retryDirections: directions,
+    };
   }
 
   const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
@@ -350,6 +392,7 @@ async function analyzePhotosWithGoogleVision(photos, retryPhotos, bucket) {
         const [url] = await file.getSignedUrl({ action: "read", expires: "03-09-2500" });
         allUploadedImages[direction].push(url);
       } catch (error) {
+        console.error(`Error saving image for ${direction}:`, error);
         continue;
       }
     }
@@ -409,6 +452,7 @@ async function analyzePhotosWithGoogleVision(photos, retryPhotos, bucket) {
           isReliable = true;
         }
       } catch (error) {
+        console.error(`Error analyzing image for ${direction}:`, error);
         retryDirections.push(direction);
       }
     }
@@ -431,69 +475,97 @@ function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo) {
   const { windows, doors, windowSizes, doorSizes } = windowDoorCount;
   const { roofArea, roofMaterial } = roofInfo;
 
-  const sidingArea = area * 1.1;
+  const sidingArea = area * 1.1; // 10% extra for waste
   const siding = `Siding: ${Math.round(sidingArea)} sq ft`;
-
   const paintGallons = Math.ceil((area * 2) / 400);
   const paint = `Exterior Paint: ${paintGallons} gallons`;
-
   const windowEstimates = windowSizes.map((size, index) => `Window ${index + 1}: ${size}`);
   const doorEstimates = doorSizes.map((size, index) => `Door ${index + 1}: ${size}`);
-
   const roofing = `Roofing (${roofMaterial}): ${Math.round(roofArea)} sq ft`;
 
   return [siding, paint, ...windowEstimates, ...doorEstimates, roofing];
 }
 
-function calculateCostEstimates(materialEstimates, windowDoorCount, area) {
-  let totalCost = 0;
+function calculateCostEstimates(materialEstimates, windowDoorCount, area, addressData) {
+  let totalCostLow = 0;
+  let totalCostHigh = 0;
   const costBreakdown = [];
 
-  // Material-specific labor rates
-  const sidingLaborRate = 3.50; // $3.50/sq ft
-  const paintLaborRate = 1.50; // $1.50/sq ft
-  const windowLaborRate = 200; // $200/window
-  const doorLaborRate = 350; // $350/door
-  const roofingLaborRate = 2.25; // $2.25/sq ft
+  // Material and labor cost ranges (per unit or sq ft, based on 2025 industry standards)
+  const costRanges = {
+    siding: { materialLow: 6, materialHigh: 10, laborLow: 3, laborHigh: 5 },
+    paint: { materialLow: 30, materialHigh: 50, laborLow: 1, laborHigh: 2.5 },
+    window: { materialLow: 400, materialHigh: 700, laborLow: 150, laborHigh: 300 },
+    door: { materialLow: 800, materialHigh: 1200, laborLow: 250, laborHigh: 450 },
+    roofing: { materialLow: 2.5, materialHigh: 4.5, laborLow: 2, laborHigh: 3.5 },
+  };
+
+  // Get location-based multiplier
+  const { multiplierLow, multiplierHigh } = getLocationMultiplier(addressData);
 
   materialEstimates.forEach(item => {
     if (item.includes("Siding")) {
       const sidingArea = parseInt(item.match(/\d+/)[0]);
-      const materialCost = sidingArea * 8; // $8/sq ft for vinyl siding
-      const laborCost = sidingArea * sidingLaborRate; // $3.50/sq ft
-      totalCost += materialCost + laborCost;
-      costBreakdown.push(`Siding Material: $${materialCost} (${sidingArea} sq ft at $8/sq ft)`);
-      costBreakdown.push(`Siding Labor: $${laborCost} (${sidingArea} sq ft at $${sidingLaborRate}/sq ft)`);
+      const materialCostLow = sidingArea * costRanges.siding.materialLow * multiplierLow;
+      const materialCostHigh = sidingArea * costRanges.siding.materialHigh * multiplierHigh;
+      const laborCostLow = sidingArea * costRanges.siding.laborLow * multiplierLow;
+      const laborCostHigh = sidingArea * costRanges.siding.laborHigh * multiplierHigh;
+      totalCostLow += materialCostLow + laborCostLow;
+      totalCostHigh += materialCostHigh + laborCostHigh;
+      costBreakdown.push(
+        `Siding Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${sidingArea} sq ft at $${costRanges.siding.materialLow}–$${costRanges.siding.materialHigh}/sq ft)`,
+        `Siding Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${sidingArea} sq ft at $${costRanges.siding.laborLow}–$${costRanges.siding.laborHigh}/sq ft)`
+      );
     } else if (item.includes("Exterior Paint")) {
       const gallons = parseInt(item.match(/\d+/)[0]);
-      const materialCost = gallons * 40; // $40/gallon
-      const laborCost = area * paintLaborRate; // $1.50/sq ft
-      totalCost += materialCost + laborCost;
-      costBreakdown.push(`Exterior Paint Material: $${materialCost} (${gallons} gallons at $40/gallon)`);
-      costBreakdown.push(`Exterior Paint Labor: $${laborCost} (${area} sq ft at $${paintLaborRate}/sq ft)`);
+      const materialCostLow = gallons * costRanges.paint.materialLow * multiplierLow;
+      const materialCostHigh = gallons * costRanges.paint.materialHigh * multiplierHigh;
+      const laborCostLow = area * costRanges.paint.laborLow * multiplierLow;
+      const laborCostHigh = area * costRanges.paint.laborHigh * multiplierHigh;
+      totalCostLow += materialCostLow + laborCostLow;
+      totalCostHigh += materialCostHigh + laborCostHigh;
+      costBreakdown.push(
+        `Exterior Paint Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${gallons} gallons at $${costRanges.paint.materialLow}–$${costRanges.paint.materialHigh}/gallon)`,
+        `Exterior Paint Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${area} sq ft at $${costRanges.paint.laborLow}–$${costRanges.paint.laborHigh}/sq ft)`
+      );
     } else if (item.includes("Window")) {
-      const materialCost = 500; // $500 per window
-      const laborCost = windowLaborRate; // $200/window
-      totalCost += materialCost + laborCost;
-      costBreakdown.push(`${item} Material: $${materialCost}`);
-      costBreakdown.push(`${item} Labor: $${laborCost}`);
+      const materialCostLow = costRanges.window.materialLow * multiplierLow;
+      const materialCostHigh = costRanges.window.materialHigh * multiplierHigh;
+      const laborCostLow = costRanges.window.laborLow * multiplierLow;
+      const laborCostHigh = costRanges.window.laborHigh * multiplierHigh;
+      totalCostLow += materialCostLow + laborCostLow;
+      totalCostHigh += materialCostHigh + laborCostHigh;
+      costBreakdown.push(
+        `${item} Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)}`,
+        `${item} Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)}`
+      );
     } else if (item.includes("Door")) {
-      const materialCost = 1000; // $1,000 per door
-      const laborCost = doorLaborRate; // $350/door
-      totalCost += materialCost + laborCost;
-      costBreakdown.push(`${item} Material: $${materialCost}`);
-      costBreakdown.push(`${item} Labor: $${laborCost}`);
+      const materialCostLow = costRanges.door.materialLow * multiplierLow;
+      const materialCostHigh = costRanges.door.materialHigh * multiplierHigh;
+      const laborCostLow = costRanges.door.laborLow * multiplierLow;
+      const laborCostHigh = costRanges.door.laborHigh * multiplierHigh;
+      totalCostLow += materialCostLow + laborCostLow;
+      totalCostHigh += materialCostHigh + laborCostHigh;
+      costBreakdown.push(
+        `${item} Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)}`,
+        `${item} Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)}`
+      );
     } else if (item.includes("Roofing")) {
       const roofArea = parseInt(item.match(/\d+/)[0]);
-      const materialCost = roofArea * 3; // $3/sq ft for shingles
-      const laborCost = roofArea * roofingLaborRate; // $2.25/sq ft
-      totalCost += materialCost + laborCost;
-      costBreakdown.push(`Roofing Material: $${materialCost} (${roofArea} sq ft at $3/sq ft)`);
-      costBreakdown.push(`Roofing Labor: $${laborCost} (${roofArea} sq ft at $${roofingLaborRate}/sq ft)`);
+      const materialCostLow = roofArea * costRanges.roofing.materialLow * multiplierLow;
+      const materialCostHigh = roofArea * costRanges.roofing.materialHigh * multiplierHigh;
+      const laborCostLow = roofArea * costRanges.roofing.laborLow * multiplierLow;
+      const laborCostHigh = roofArea * costRanges.roofing.laborHigh * multiplierHigh;
+      totalCostLow += materialCostLow + laborCostLow;
+      totalCostHigh += materialCostHigh + laborCostHigh;
+      costBreakdown.push(
+        `Roofing Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${roofArea} sq ft at $${costRanges.roofing.materialLow}–$${costRanges.roofing.materialHigh}/sq ft)`,
+        `Roofing Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${roofArea} sq ft at $${costRanges.roofing.laborLow}–$${costRanges.roofing.laborHigh}/sq ft)`
+      );
     }
   });
 
-  return { totalCost: Math.round(totalCost), costBreakdown };
+  return { totalCostLow: Math.round(totalCostLow), totalCostHigh: Math.round(totalCostHigh), costBreakdown };
 }
 
 function calculateTimeline(area, windowDoorCount) {
