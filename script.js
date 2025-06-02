@@ -1,3 +1,4 @@
+// Dynamic input generation for windows
 document.getElementById("windowCount").addEventListener("input", (e) => {
   const count = parseInt(e.target.value) || 0;
   const windowSizesDiv = document.getElementById("windowSizes");
@@ -14,6 +15,7 @@ document.getElementById("windowCount").addEventListener("input", (e) => {
   }
 });
 
+// Dynamic input generation for doors
 document.getElementById("doorCount").addEventListener("input", (e) => {
   const count = parseInt(e.target.value) || 0;
   const doorSizesDiv = document.getElementById("doorSizes");
@@ -30,6 +32,7 @@ document.getElementById("doorCount").addEventListener("input", (e) => {
   }
 });
 
+// Form submission handler
 document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const submitButton = e.target.querySelector("button[type='submit']");
@@ -52,13 +55,14 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   const windowCount = parseInt(document.getElementById("windowCount").value) || null;
   const doorCount = parseInt(document.getElementById("doorCount").value) || null;
 
+  // Validate window sizes
   const windowSizes = [];
   if (windowCount) {
     for (let i = 0; i < windowCount; i++) {
       const width = parseFloat(document.getElementById(`windowWidth${i}`).value);
       const height = parseFloat(document.getElementById(`windowHeight${i}`).value);
       if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
-        displayError(`Please provide valid dimensions for Window ${i + 1}.`);
+        displayError(`Please provide valid dimensions for Window ${i + 1} (positive numbers).`);
         submitButton.disabled = false;
         submitButton.innerHTML = "Get Estimate";
         return;
@@ -67,13 +71,14 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     }
   }
 
+  // Validate door sizes
   const doorSizes = [];
   if (doorCount) {
     for (let i = 0; i < doorCount; i++) {
       const width = parseFloat(document.getElementById(`doorWidth${i}`).value);
       const height = parseFloat(document.getElementById(`doorHeight${i}`).value);
       if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
-        displayError(`Please provide valid dimensions for Door ${i + 1}.`);
+        displayError(`Please provide valid dimensions for Door ${i + 1} (positive numbers).`);
         submitButton.disabled = false;
         submitButton.innerHTML = "Get Estimate";
         return;
@@ -82,6 +87,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     }
   }
 
+  // Validate address
   if (!address) {
     displayError("Please enter a valid address.");
     submitButton.disabled = false;
@@ -89,6 +95,17 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     return;
   }
 
+  // Validate at least one photo or manual counts
+  const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0) +
+                      Object.values(retryPhotos).reduce((sum, arr) => sum + arr.length, 0);
+  if (totalImages === 0 && windowCount === null && doorCount === null) {
+    displayError("Please upload at least one photo for each direction or provide window and door counts.");
+    submitButton.disabled = false;
+    submitButton.innerHTML = "Get Estimate";
+    return;
+  }
+
+  // Log photo inputs
   console.log("Raw photo inputs:", {
     north: photos.north.map(file => file.name),
     south: photos.south.map(file => file.name),
@@ -101,10 +118,9 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     east: retryPhotos.east.map(file => file.name),
     west: retryPhotos.west.map(file => file.name),
   });
-
-  const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0);
   console.log(`Total images selected: ${totalImages}`);
 
+  // Warn about multiple images per direction
   const directions = ["north", "south", "east", "west"];
   for (const direction of directions) {
     if (photos[direction].length > 1) {
@@ -113,6 +129,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     document.getElementById(`${direction}Retry`).style.display = "none"; // Reset retry prompts
   }
 
+  // Convert photos to base64
   let resolvedPhotos, resolvedRetryPhotos;
   try {
     const timeoutPromise = new Promise((_, reject) => {
@@ -160,6 +177,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     return;
   }
 
+  // Send request to Netlify function
   try {
     document.getElementById("results").innerHTML = `
       <div style="text-align: center;">
@@ -210,6 +228,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       return;
     }
 
+    // Process and display results
     const remodelId = result.remodelId || "unknown";
     const addressDisplay = result.addressData?.display_name || "Unknown Address";
     const measurements = result.measurements || { width: "N/A", length: "N/A", area: "N/A" };
@@ -217,7 +236,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const windowDoorCount = result.windowDoorCount || { windows: 0, doors: 0, windowSizes: [], doorSizes: [], isReliable: false };
     const isWindowDoorCountReliable = windowDoorCount.isReliable || false;
     const materialEstimates = result.materialEstimates || ["No estimates available"];
-    const costEstimates = result.costEstimates || { totalCost: "N/A", costBreakdown: ["No cost breakdown available"] };
+    const costEstimates = result.costEstimates || { totalCostLow: "N/A", totalCostHigh: "N/A", costBreakdown: ["No cost breakdown available"] };
     const timelineEstimate = result.timelineEstimate || "N/A";
     const roofInfo = result.roofInfo || { pitch: "N/A", height: "N/A", roofArea: "N/A", roofMaterial: "N/A", isPitchReliable: false, pitchSource: "default" };
     const processedImages = result.processedImages || {};
@@ -297,9 +316,9 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
     if (isCostReliable) {
       resultsHtml += `
-        <p style="margin: 0.5rem 0;"><strong>Total:</strong> $${costEstimates.totalCost}</p>
+        <p style="margin: 0.5rem 0;"><strong>Total:</strong> $${costEstimates.totalCostLow.toLocaleString()}–$${costEstimates.totalCostHigh.toLocaleString()}</p>
         <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${costEstimates.costBreakdown.map(item => `<li>${item}</li>`).join("")}</ul>
-        <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Costs are approximate and may vary based on final measurements, material prices, and labor rates.</p>
+        <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Costs are approximate and may vary based on final measurements, material prices, labor rates, and location-specific factors.</p>
       `;
       if (!isMeasurementsReliable || !isWindowDoorCountReliable) {
         resultsHtml += `
@@ -317,8 +336,8 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       <p style="margin: 0.5rem 0;">${timelineEstimate} weeks</p>
       <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Timeline depends on project scope, weather, and crew availability.</p>
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Permit Information</h3>
-      <p style="margin: 0.5rem 0;">Remodeling in Indiana may require permits for structural, electrical, or plumbing work. Contact your local building department.</p>
-      <p style="margin: 0.5rem 0;"><a href="https://www.in.gov/dhs/building-construction/permits/" target="_blank" style="color: #e67e22; text-decoration: none;">Learn More About Indiana Permits</a></p>
+      <p style="margin: 0.5rem 0;">Remodeling in your area may require permits for structural, electrical, or plumbing work. Contact your local building department.</p>
+      <p style="margin: 0.5rem 0;"><a href="https://www.usa.gov/local-building-permits" target="_blank" style="color: #e67e22; text-decoration: none;">Learn More About Permits</a></p>
     `;
 
     for (const direction of directions) {
@@ -378,7 +397,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       `;
     }
 
-    const smsSummary = `Remodel at ${addressDisplay}: ${measurements.area}sqft, ${windowDoorCount.windows} windows, ${windowDoorCount.doors} doors, ~$${costEstimates.totalCost || "N/A"}. Contact Indy Home Improvements for a detailed quote.`;
+    const smsSummary = `Remodel at ${addressDisplay}: ${measurements.area}sqft, ${windowDoorCount.windows} windows, ${windowDoorCount.doors} doors, ~$${costEstimates.totalCostLow.toLocaleString()}–$${costEstimates.totalCostHigh.toLocaleString()}. Contact Indy Home Improvements for a detailed quote.`;
     resultsHtml += `
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Next Steps with Indy Home Improvements</h3>
       <p style="margin: 0.5rem 0;">Ready to discuss your project? Contact us directly to request more info or a detailed quote.</p>
@@ -392,13 +411,14 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     document.getElementById("results").innerHTML = resultsHtml;
   } catch (error) {
     console.error("Fetch error:", error);
-    displayError(`Error: ${error.message}`);
+    displayError(`Error: ${error.message}. Please try again or contact support.`);
   } finally {
     submitButton.disabled = false;
     submitButton.innerHTML = "Get Estimate";
   }
 });
 
+// Photo upload and camera capture handlers
 const directions = ["north", "south", "east", "west"];
 directions.forEach(direction => {
   document.getElementById(`${direction}Photos`).addEventListener("change", (e) => {
@@ -540,6 +560,7 @@ directions.forEach(direction => {
   });
 });
 
+// Utility functions
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     if (!file || !file.type.startsWith("image/")) {
