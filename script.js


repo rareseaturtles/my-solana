@@ -115,7 +115,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     resultsHtml += `
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Permit Information</h3>
       <p style="margin: 0.5rem 0;">Remodeling in Indiana may require permits for structural, electrical, or plumbing work. Contact your local building department.</p>
-      <p style="margin: 0.5rem 0;"><a href="https://www.in.gov/dhs/building-construction/permits/" target="_blank" style="color: #e67e22; text-decoration: none;">Learn More About Indiana Permits</a></p>
+      <p style="margin: 0.5rem 0;"><a href="https://www.in.gov/" target="_blank" style="color: #e67e22; text-decoration: none;">Learn More About Indiana Permits</a></p>
     `;
 
     // Uploaded Images by Direction
