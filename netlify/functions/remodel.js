@@ -641,4 +641,5 @@ function calculateTimeline(area, windowDoorCount, components) {
     weeks += Math.ceil(additionalDays / 5);
   }
 
-  return Math.max(weeks, 1
+  return Math.max(weeks, 1);
+}
