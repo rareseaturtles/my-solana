@@ -137,6 +137,8 @@ exports.handler = async (event) => {
     const costEstimates = calculateCostEstimates(materialEstimates, windowDoorCount, measurements.area, addressData);
     const timelineEstimate = calculateTimeline(measurements.area, windowDoorCount);
 
+    console.log("Calculated cost estimates:", costEstimates); // Debug log
+
     // Save to Firestore
     const remodelEntry = {
       address: addressData[0].display_name,
@@ -186,7 +188,6 @@ function getLocationMultiplier(addressData) {
   let multiplierLow = 0.9;
   let multiplierHigh = 1.1;
 
-  // State-based multiplier (extendable with ZIP code API for precision)
   if (address.includes("california") || address.includes("new york")) {
     multiplierLow = 1.2;
     multiplierHigh = 1.4;
@@ -197,11 +198,11 @@ function getLocationMultiplier(addressData) {
     multiplierLow = 1.0;
     multiplierHigh = 1.2;
   } else {
-    // Default for rural or unspecified areas
     multiplierLow = 0.8;
     multiplierHigh = 0.95;
   }
 
+  console.log(`Location multiplier for ${address}: Low=${multiplierLow}, High=${multiplierHigh}`); // Debug log
   return { multiplierLow, multiplierHigh };
 }
 
@@ -210,7 +211,6 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
   let width = 40, length = 32, area = 1280, isReliable = false;
   let pitch = "6/12", height = 16, roofArea = 1431, roofMaterial = "Asphalt Shingles";
 
-  // Look for a high-angle photo showing the roof
   let roofImage = null;
   for (const direction of directions) {
     const images = (retryPhotos && retryPhotos[direction] && retryPhotos[direction].length > 0) ? retryPhotos[direction] : photos[direction] || [];
@@ -246,7 +246,6 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
   }
 
   if (roofImage) {
-    // Find a reference object (e.g., door) to scale the image
     let scaleFactor = null;
     for (const direction of directions) {
       const images = (retryPhotos && retryPhotos[direction] && retryPhotos[direction].length > 0) ? retryPhotos[direction] : photos[direction] || [];
@@ -277,9 +276,9 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
 
           if (door) {
             const vertices = door.boundingPoly.normalizedVertices;
-            const pixelWidth = Math.abs(vertices[1].x - vertices[0].x) * 600; // Assume image width is 600px
-            const doorWidthFeet = 3; // Standard door width
-            scaleFactor = doorWidthFeet / pixelWidth; // Feet per pixel
+            const pixelWidth = Math.abs(vertices[1].x - vertices[0].x) * 600;
+            const doorWidthFeet = 3;
+            scaleFactor = doorWidthFeet / pixelWidth;
             break;
           }
         } catch (error) {
@@ -304,7 +303,6 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
       }
     }
 
-    // Estimate pitch using Hough Lines
     try {
       const base64Image = roofImage.image.split(",")[1];
       const img = cv.imdecode(Buffer.from(base64Image, "base64"));
@@ -482,7 +480,7 @@ function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo) {
   const { windows, doors, windowSizes, doorSizes } = windowDoorCount;
   const { roofArea, roofMaterial } = roofInfo;
 
-  const sidingArea = area * 1.1; // 10% extra for waste
+  const sidingArea = area * 1.1;
   const siding = `Siding: ${Math.round(sidingArea)} sq ft`;
   const paintGallons = Math.ceil((area * 2) / 400);
   const paint = `Exterior Paint: ${paintGallons} gallons`;
@@ -490,7 +488,9 @@ function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo) {
   const doorEstimates = doorSizes.map((size, index) => `Door ${index + 1}: ${size}`);
   const roofing = `Roofing (${roofMaterial}): ${Math.round(roofArea)} sq ft`;
 
-  return [siding, paint, ...windowEstimates, ...doorEstimates, roofing];
+  const estimates = [siding, paint, ...windowEstimates, ...doorEstimates, roofing];
+  console.log("Material estimates:", estimates); // Debug log
+  return estimates;
 }
 
 function calculateCostEstimates(materialEstimates, windowDoorCount, area, addressData) {
@@ -498,7 +498,6 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
   let totalCostHigh = 0;
   const costBreakdown = [];
 
-  // Material and labor cost ranges (per unit or sq ft, based on 2025 industry standards)
   const costRanges = {
     siding: { materialLow: 6, materialHigh: 10, laborLow: 3, laborHigh: 5 },
     paint: { materialLow: 30, materialHigh: 50, laborLow: 1, laborHigh: 2.5 },
@@ -507,7 +506,6 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
     roofing: { materialLow: 2.5, materialHigh: 4.5, laborLow: 2, laborHigh: 3.5 },
   };
 
-  // Get location-based multiplier
   const { multiplierLow, multiplierHigh } = getLocationMultiplier(addressData);
 
   materialEstimates.forEach(item => {
@@ -572,12 +570,15 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
     }
   });
 
-  return { totalCostLow: Math.round(totalCostLow), totalCostHigh: Math.round(totalCostHigh), costBreakdown };
+  const costResult = { totalCostLow: Math.round(totalCostLow), totalCostHigh: Math.round(totalCostHigh), costBreakdown };
+  console.log("Cost estimates result:", costResult); // Debug log
+  return costResult;
 }
 
 function calculateTimeline(area, windowDoorCount) {
   let weeks = Math.ceil(area / 500);
   const additionalDays = (windowDoorCount.windows + windowDoorCount.doors);
   weeks += Math.ceil(additionalDays / 5);
+  console.log(`Timeline estimate: ${weeks} weeks`); // Debug log
   return weeks;
 }
