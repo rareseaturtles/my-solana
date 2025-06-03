@@ -27,28 +27,19 @@
       margin-bottom: 20px;
     }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-bottom: 20px;
-      background: #fff;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    ul {
+      list-style-type: none;
+      padding: 0;
+      margin: 0;
     }
 
-    th, td {
-      padding: 12px;
-      text-align: left;
+    li {
+      padding: 8px 0;
       border-bottom: 1px solid #ddd;
     }
 
-    th {
-      background: #f4f4f4;
-      color: #2c3e50;
-      font-weight: bold;
-    }
-
-    tr:nth-child(even) {
-      background: #f9f9f9;
+    li:last-child {
+      border-bottom: none;
     }
 
     .category {
@@ -57,12 +48,11 @@
     }
 
     .sub-item {
-      padding-left: 20px;
+      margin-left: 20px;
       color: #7f8c8d;
     }
 
     .cost {
-      text-align: right;
       font-weight: bold;
     }
 
@@ -71,7 +61,7 @@
       font-size: 0.9em;
     }
 
-    /* Styling for the form elements */
+    /* Form styling */
     div {
       margin-bottom: 15px;
     }
@@ -93,11 +83,11 @@
     }
 
     select {
-      height: 100px; /* Adjust height for multiple select */
+      height: 100px;
     }
 
     input[type="number"] {
-      max-width: 200px; /* Prevent inputs from being too wide */
+      max-width: 200px;
     }
 
     select:focus, input[type="number"]:focus {
@@ -110,7 +100,7 @@
 <body>
   <!-- Form Section -->
   <div>
-    <label for="components">Select Components to Estimate (Hold Ctrl/Cmd to select multiple):</label>
+    <label for="components">Select Components to Estimate (Hold<k>Hold Ctrl/Cmd to select multiple):</label>
     <select id="components" name="components" multiple required>
       <option value="roof">Roof</option>
       <option value="windows">Windows</option>
@@ -131,64 +121,24 @@
   <h2>Cost Estimate (Approximate)</h2>
   <div class="total">TOTAL: $27,471–$55,933</div>
 
-  <table>
-    <tr>
-      <th>Category</th>
-      <th>Cost</th>
-    </tr>
-    <tr>
-      <td class="category">Siding Material</td>
-      <td class="cost">$8,870–$18,586 <span class="details">(1408 sq ft at $7–$12/sq ft)</span></td>
-    </tr>
-    <tr>
-      <td class="category">Siding Labor</td>
-      <td class="cost">$5,069–$9,293 <span class="details">(1408 sq ft at $4–$6/sq ft)</span></td>
-    </tr>
-    <tr>
-      <td class="category">Exterior Paint Material</td>
-      <td class="cost">$221–$424 <span class="details">(7 gallons at $35–$55/gallon)</span></td>
-    </tr>
-    <tr>
-      <td class="category">Exterior Paint Labor</td>
-      <td class="cost">$1,728–$4,224 <span class="details">(1280 sq ft at $1.5–$3/sq ft)</span></td>
-    </tr>
-    <tr>
-      <td class="category">Windows (3ft x 4ft)</td>
-      <td class="cost"></td>
-    </tr>
-    <tr>
-      <td class="sub-item">Window 1: Material</td>
-      <td class="cost">$405–$880</td>
-    </tr>
-    <tr>
-      <td class="sub-item">Window 1: Labor</td>
-      <td class="cost">$180–$385</td>
-    </tr>
-    <tr>
-      <td class="sub-item">Window 2: Material</td>
-      <td class="cost">$405–$880</td>
-    </tr>
-    <tr>
-      <td class="sub-item">Window 2: Labor</td>
-      <td class="cost">$180–$385</td>
-    </tr>
-    <tr>
-      <td class="sub-item">Window 3: Material</td>
-      <td class="cost">$405–$880</td>
-    </tr>
-    <tr>
-      <td class="sub-item">Window 3: Labor</td>
-      <td class="cost">$180–$385</td>
-    </tr>
-    <tr>
-      <td class="sub-item">Window 4: Material</td>
-      <td class="cost">$405–$880</td>
-    </tr>
-    <tr>
-      <td class="sub-item">Window 4: Labor</td>
-      <td class="cost">$180–$385</td>
-    </tr>
-  </table>
+  <ul>
+    <li><span class="category">Siding Material:</span> <span class="cost">$8,870–$18,586</span> <span class="details">(1408 sq ft at $7–$12/sq ft)</span></li>
+    <li><span class="category">Siding Labor:</span> <span class="cost">$5,069–$9,293</span> <span class="details">(1408 sq ft at $4–$6/sq ft)</span></li>
+    <li><span class="category">Exterior Paint Material:</span> <span class="cost">$221–$424</span> <span class="details">(7 gallons at $35–$55/gallon)</span></li>
+    <li><span class="category">Exterior Paint Labor:</span> <span class="cost">$1,728–$4,224</span> <span class="details">(1280 sq ft at $1.5–$3/sq ft)</span></li>
+    <li><span class="category">Window 1: 3ft x 4ft</span></li>
+    <li class="sub-item">Material: <span class="cost">$405–$880</span></li>
+    <li class="sub-item">Labor: <span class="cost">$180–$385</span></li>
+    <li><span class="category">Window 2: 3ft x 4ft</span></li>
+    <li class="sub-item">Material: <span class="cost">$405–$880</span></li>
+    <li class="sub-item">Labor: <span class="cost">$180–$385</span></li>
+    <li><span class="category">Window 3: 3ft x 4ft</span></li>
+    <li class="sub-item">Material: <span class="cost">$405–$880</span></li>
+    <li class="sub-item">Labor: <span class="cost">$180–$385</span></li>
+    <li><span class="category">Window 4: 3ft x 4ft</span></li>
+    <li class="sub-item">Material: <span class="cost">$405–$880</span></li>
+    <li class="sub-item">Labor: <span class="cost">$180–$385</span></li>
+  </ul>
 
   <script src="script.js"></script>
 </body>
