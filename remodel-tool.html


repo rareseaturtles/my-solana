@@ -186,7 +186,7 @@
       <h2>Remodel Tool</h2>
       <form id="remodelForm">
         <div>
-          <label for="components">Select Components to Estimate (Hold Ctrl/Cmd to select multiple):</label>
+          <label for="components">Select Components to Estimate :</label>
           <select id="components" name="components" multiple required>
             <option value="roof">Roof</option>
             <option value="windows">Windows</option>
