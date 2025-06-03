@@ -27,7 +27,7 @@ exports.handler = async (event) => {
       throw new Error("Invalid request body: Failed to parse JSON");
     }
 
-    const { address, components, photos, windowCount, doorCount } = body;
+    const { address, components, photos, windowCount, doorCount, userPin } = body;
 
     if (!address) {
       throw new Error("Missing address in request body");
@@ -61,6 +61,7 @@ exports.handler = async (event) => {
       .flatMap(direction => photos[direction] || [])
       .filter(image => image && typeof image === "string" && image.startsWith("data:image/")).length;
 
+    // Validate address using OpenStreetMap
     const addressResponse = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
       { headers: { "User-Agent": "IndyHomeImprovements/1.0" } }
@@ -74,10 +75,25 @@ exports.handler = async (event) => {
       throw new Error("Invalid address: No results found");
     }
 
-    const lat = parseFloat(addressData[0].lat);
-    const lon = parseFloat(addressData[0].lon);
+    let lat = parseFloat(addressData[0].lat);
+    let lon = parseFloat(addressData[0].lon);
 
-    const buildingData = await getBuildingDataFromUserImages(photos, lat, lon, addressData);
+    // Use userPin coordinates if provided and valid
+    if (userPin && typeof userPin.lat === "number" && typeof userPin.lng === "number") {
+      const userLat = userPin.lat;
+      const userLng = userPin.lng;
+      // Validate userPin coordinates are within a reasonable distance from address coordinates
+      const distance = Math.sqrt(Math.pow(userLat - lat, 2) + Math.pow(userLng - lon, 2));
+      if (distance < 0.01) { // Roughly 1km, adjust as needed
+        lat = userLat;
+        lon = userLng;
+        console.log(`Backend - Using user-provided coordinates: lat=${lat}, lon=${lon}`);
+      } else {
+        console.warn(`Backend - User-provided coordinates too far from address coordinates, using address coordinates instead`);
+      }
+    }
+
+    const buildingData = await getBuildingDataFromUserImages(photos, lat, lon, addressData, !!userPin);
     const measurements = buildingData.measurements;
     const roofInfo = buildingData.roofInfo;
     const isMeasurementsReliable = buildingData.isReliable;
@@ -100,8 +116,10 @@ exports.handler = async (event) => {
     if (totalImages === 0) {
       const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
       if (GOOGLE_MAPS_API_KEY) {
-        satelliteViewImage = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=19&size=800x600&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
-        console.log(`Backend - Fetched satellite view image for ${lat},${lon}`);
+        // Use higher zoom level if userPin is provided
+        const zoomLevel = userPin ? 20 : 19;
+        satelliteViewImage = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=${zoomLevel}&size=800x600&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
+        console.log(`Backend - Fetched satellite view image for ${lat},${lon} at zoom level ${zoomLevel}`);
       } else {
         console.warn("Backend - GOOGLE_MAPS_API_KEY not set, skipping satellite view image fetch.");
       }
@@ -203,15 +221,13 @@ function getAverageHomeSize(addressData) {
   return averageArea;
 }
 
-// Helper function to calculate meters per pixel based on latitude and zoom level
 function calculateMetersPerPixel(latitude, zoom) {
-  // Formula: metersPerPixel = (156543.03392 * cos(latitude * π/180)) / (2^zoom)
   const metersPerPixel = (156543.03392 * Math.cos(latitude * Math.PI / 180)) / Math.pow(2, zoom);
   console.log(`Backend - Calculated meters per pixel at latitude ${latitude}, zoom ${zoom}: ${metersPerPixel}`);
   return metersPerPixel;
 }
 
-async function getBuildingDataFromUserImages(photos, lat, lon, addressData) {
+async function getBuildingDataFromUserImages(photos, lat, lon, addressData, hasUserPin) {
   const directions = ["north", "south", "east", "west"];
   let width, length, area, isReliable = false;
   let pitch = "6/12", height = 16, roofArea, roofMaterial = "Asphalt Shingles";
@@ -224,9 +240,9 @@ async function getBuildingDataFromUserImages(photos, lat, lon, addressData) {
     const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
     if (GOOGLE_MAPS_API_KEY) {
       console.log(`Backend - Attempting to estimate area using satellite imagery for ${lat},${lon}`);
-      const satelliteImageUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=19&size=800x600&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
+      const zoomLevel = hasUserPin ? 20 : 19;
+      const satelliteImageUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=${zoomLevel}&size=800x600&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
 
-      // Fetch the satellite image as a buffer
       const imageResponse = await fetch(satelliteImageUrl);
       if (!imageResponse.ok) {
         console.warn(`Backend - Failed to fetch satellite image: ${imageResponse.statusText}`);
@@ -237,7 +253,6 @@ async function getBuildingDataFromUserImages(photos, lat, lon, addressData) {
         const imageBuffer = await imageResponse.arrayBuffer();
         const base64Image = Buffer.from(imageBuffer).toString("base64");
 
-        // Analyze the satellite image using Google Vision API with multiple features
         const visionResponse = await fetch(
           `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`,
           {
@@ -266,21 +281,19 @@ async function getBuildingDataFromUserImages(photos, lat, lon, addressData) {
           const visionData = await visionResponse.json();
           console.log("Backend - Vision API Response:", visionData);
 
-          // Step 1: Try Object Localization to detect the building
           const objects = visionData.responses[0]?.localizedObjectAnnotations || [];
-          let building = objects.find(obj => (obj.name.toLowerCase().includes("house") || obj.name.toLowerCase().includes("building")) && obj.score > 0.3); // Lowered threshold
+          let building = objects.find(obj => (obj.name.toLowerCase().includes("house") || obj.name.toLowerCase().includes("building")) && obj.score > 0.3);
 
           if (building) {
             console.log(`Backend - Building detected with confidence ${building.score}`);
             const vertices = building.boundingPoly.normalizedVertices;
-            const pixelWidth = Math.abs(vertices[1].x - vertices[0].x) * 800; // Image width in pixels
-            const pixelHeight = Math.abs(vertices[2].y - vertices[0].y) * 600; // Image height in pixels
+            const pixelWidth = Math.abs(vertices[1].x - vertices[0].x) * 800;
+            const pixelHeight = Math.abs(vertices[2].y - vertices[0].y) * 600;
             const pixelArea = pixelWidth * pixelHeight;
 
-            // Calculate precise scale factor
-            const metersPerPixel = calculateMetersPerPixel(lat, 19);
+            const metersPerPixel = calculateMetersPerPixel(lat, zoomLevel);
             const areaMeters = pixelArea * metersPerPixel * metersPerPixel;
-            area = Math.round(areaMeters * 10.7639); // Convert to square feet
+            area = Math.round(areaMeters * 10.7639);
 
             if (area < 500 || area > 5000) {
               console.warn(`Backend - Estimated area ${area} sqft out of bounds, using regional average`);
@@ -294,23 +307,18 @@ async function getBuildingDataFromUserImages(photos, lat, lon, addressData) {
             length = Math.round(area / width);
             console.log(`Backend - Satellite image analysis (Object Localization) estimated area: ${area} sqft`);
           } else {
-            // Step 2: Fallback to color-based roof detection using IMAGE_PROPERTIES
             console.log("Backend - No building detected, attempting color-based roof detection");
             const imageProperties = visionData.responses[0]?.imagePropertiesAnnotation;
             if (imageProperties && imageProperties.dominantColors && imageProperties.dominantColors.colors) {
-              // Identify the dominant color that might represent the roof (e.g., darker colors for asphalt shingles)
               const roofColor = imageProperties.dominantColors.colors.find(color => {
                 const rgb = color.color;
-                // Assume roofs are typically darker (e.g., asphalt shingles)
                 return rgb.red < 150 && rgb.green < 150 && rgb.blue < 150 && color.score > 0.2;
               });
 
               if (roofColor) {
                 console.log(`Backend - Potential roof color detected:`, roofColor);
-                // Since we can't do edge detection directly, approximate the roof area by assuming the roof occupies a central portion of the image
-                // This is a simplification; in a real implementation, you'd need image segmentation
-                const pixelArea = 800 * 600 * roofColor.pixelFraction; // Approximate area covered by the roof color
-                const metersPerPixel = calculateMetersPerPixel(lat, 19);
+                const pixelArea = 800 * 600 * roofColor.pixelFraction;
+                const metersPerPixel = calculateMetersPerPixel(lat, zoomLevel);
                 const areaMeters = pixelArea * metersPerPixel * metersPerPixel;
                 area = Math.round(areaMeters * 10.7639);
 
@@ -360,7 +368,6 @@ async function getBuildingDataFromUserImages(photos, lat, lon, addressData) {
     };
   }
 
-  // Use Google Vision API for user-uploaded photos (unchanged)
   let scaleFactor = null;
   for (const direction of directions) {
     const images = photos[direction] || [];
@@ -634,5 +641,4 @@ function calculateTimeline(area, windowDoorCount, components) {
     weeks += Math.ceil(additionalDays / 5);
   }
 
-  return Math.max(weeks, 1);
-}
+  return Math.max(weeks, 1
