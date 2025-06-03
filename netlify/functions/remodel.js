@@ -137,7 +137,9 @@ exports.handler = async (event) => {
     const costEstimates = calculateCostEstimates(materialEstimates, windowDoorCount, measurements.area, addressData);
     const timelineEstimate = calculateTimeline(measurements.area, windowDoorCount);
 
-    console.log("Calculated cost estimates:", costEstimates); // Debug log
+    console.log("Backend - Material Estimates:", materialEstimates);
+    console.log("Backend - Cost Estimates:", costEstimates);
+    console.log("Backend - Timeline Estimate:", timelineEstimate);
 
     // Save to Firestore
     const remodelEntry = {
@@ -157,24 +159,27 @@ exports.handler = async (event) => {
 
     const docRef = await db.collection("remodels").add(remodelEntry);
 
+    const response = {
+      remodelId: docRef.id,
+      addressData: addressData[0],
+      measurements,
+      isMeasurementsReliable,
+      windowDoorCount,
+      materialEstimates,
+      costEstimates,
+      timelineEstimate,
+      roofInfo,
+      processedImages,
+      allUploadedImages,
+    };
+
+    console.log("Backend - Final Response:", response);
     return {
       statusCode: 200,
-      body: JSON.stringify({
-        remodelId: docRef.id,
-        addressData: addressData[0],
-        measurements,
-        isMeasurementsReliable,
-        windowDoorCount,
-        materialEstimates,
-        costEstimates,
-        timelineEstimate,
-        roofInfo,
-        processedImages,
-        allUploadedImages,
-      }),
+      body: JSON.stringify(response),
     };
   } catch (error) {
-    console.error("Handler error:", error);
+    console.error("Backend - Handler Error:", error);
     return {
       statusCode: error.message.includes("Invalid address") || error.message.includes("Invalid photos data") ? 400 : 500,
       body: JSON.stringify({ error: error.message }),
@@ -202,7 +207,7 @@ function getLocationMultiplier(addressData) {
     multiplierHigh = 0.95;
   }
 
-  console.log(`Location multiplier for ${address}: Low=${multiplierLow}, High=${multiplierHigh}`); // Debug log
+  console.log(`Backend - Location Multiplier for ${address}: Low=${multiplierLow}, High=${multiplierHigh}`);
   return { multiplierLow, multiplierHigh };
 }
 
@@ -239,7 +244,7 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
           break;
         }
       } catch (error) {
-        console.error(`Error processing image for roof detection in ${direction}:`, error);
+        console.error(`Backend - Error processing image for roof detection in ${direction}:`, error);
       }
     }
     if (roofImage) break;
@@ -282,7 +287,7 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
             break;
           }
         } catch (error) {
-          console.error(`Error scaling image in ${direction}:`, error);
+          console.error(`Backend - Error scaling image in ${direction}:`, error);
         }
       }
       if (scaleFactor) break;
@@ -320,7 +325,7 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
       else if (steepestAngle > 30) pitch = "6/12";
       else pitch = "4/12";
     } catch (error) {
-      console.error("Error estimating roof pitch:", error);
+      console.error("Backend - Error estimating roof pitch:", error);
     }
   }
 
@@ -330,11 +335,14 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
   const roofHeight = (width / 2) * (parseInt(pitch.split("/")[0]) / 12);
   height = baseHeight + roofHeight;
 
-  return {
+  const buildingData = {
     measurements: { width, length, area },
     roofInfo: { pitch, height: Math.round(height), roofArea: Math.round(roofArea), roofMaterial, isPitchReliable: !!roofImage, pitchSource: roofImage ? "user_image" : "default" },
     isReliable,
   };
+
+  console.log("Backend - Building Data:", buildingData);
+  return buildingData;
 }
 
 async function analyzePhotosWithGoogleVision(photos, retryPhotos, bucket) {
@@ -397,7 +405,7 @@ async function analyzePhotosWithGoogleVision(photos, retryPhotos, bucket) {
         const [url] = await file.getSignedUrl({ action: "read", expires: "03-09-2500" });
         allUploadedImages[direction].push(url);
       } catch (error) {
-        console.error(`Error saving image for ${direction}:`, error);
+        console.error(`Backend - Error saving image for ${direction}:`, error);
         continue;
       }
     }
@@ -457,13 +465,13 @@ async function analyzePhotosWithGoogleVision(photos, retryPhotos, bucket) {
           isReliable = true;
         }
       } catch (error) {
-        console.error(`Error analyzing image for ${direction}:`, error);
+        console.error(`Backend - Error analyzing image for ${direction}:`, error);
         retryDirections.push(direction);
       }
     }
   }
 
-  return {
+  const windowDoorInfo = {
     windows: windowCount,
     doors: doorCount,
     windowSizes,
@@ -473,6 +481,9 @@ async function analyzePhotosWithGoogleVision(photos, retryPhotos, bucket) {
     isReliable,
     retryDirections,
   };
+
+  console.log("Backend - Window/Door Info:", windowDoorInfo);
+  return windowDoorInfo;
 }
 
 function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo) {
@@ -488,9 +499,7 @@ function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo) {
   const doorEstimates = doorSizes.map((size, index) => `Door ${index + 1}: ${size}`);
   const roofing = `Roofing (${roofMaterial}): ${Math.round(roofArea)} sq ft`;
 
-  const estimates = [siding, paint, ...windowEstimates, ...doorEstimates, roofing];
-  console.log("Material estimates:", estimates); // Debug log
-  return estimates;
+  return [siding, paint, ...windowEstimates, ...doorEstimates, roofing];
 }
 
 function calculateCostEstimates(materialEstimates, windowDoorCount, area, addressData) {
@@ -498,12 +507,13 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
   let totalCostHigh = 0;
   const costBreakdown = [];
 
+  // Updated cost ranges for 2025 (adjusted for inflation and market trends)
   const costRanges = {
-    siding: { materialLow: 6, materialHigh: 10, laborLow: 3, laborHigh: 5 },
-    paint: { materialLow: 30, materialHigh: 50, laborLow: 1, laborHigh: 2.5 },
-    window: { materialLow: 400, materialHigh: 700, laborLow: 150, laborHigh: 300 },
-    door: { materialLow: 800, materialHigh: 1200, laborLow: 250, laborHigh: 450 },
-    roofing: { materialLow: 2.5, materialHigh: 4.5, laborLow: 2, laborHigh: 3.5 },
+    siding: { materialLow: 7, materialHigh: 12, laborLow: 4, laborHigh: 6 }, // Increased due to material cost rise
+    paint: { materialLow: 35, materialHigh: 55, laborLow: 1.5, laborHigh: 3 },
+    window: { materialLow: 450, materialHigh: 800, laborLow: 200, laborHigh: 350 },
+    door: { materialLow: 900, materialHigh: 1400, laborLow: 300, laborHigh: 500 },
+    roofing: { materialLow: 3, materialHigh: 5, laborLow: 2.5, laborHigh: 4 },
   };
 
   const { multiplierLow, multiplierHigh } = getLocationMultiplier(addressData);
@@ -570,15 +580,12 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
     }
   });
 
-  const costResult = { totalCostLow: Math.round(totalCostLow), totalCostHigh: Math.round(totalCostHigh), costBreakdown };
-  console.log("Cost estimates result:", costResult); // Debug log
-  return costResult;
+  return { totalCostLow: Math.round(totalCostLow), totalCostHigh: Math.round(totalCostHigh), costBreakdown };
 }
 
 function calculateTimeline(area, windowDoorCount) {
   let weeks = Math.ceil(area / 500);
   const additionalDays = (windowDoorCount.windows + windowDoorCount.doors);
   weeks += Math.ceil(additionalDays / 5);
-  console.log(`Timeline estimate: ${weeks} weeks`); // Debug log
   return weeks;
 }
