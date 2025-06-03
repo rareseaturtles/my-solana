@@ -1,6 +1,5 @@
 const admin = require("firebase-admin");
 const fetch = require("node-fetch");
-const cv = require("opencv4nodejs");
 
 exports.handler = async (event) => {
   try {
@@ -76,8 +75,8 @@ exports.handler = async (event) => {
     const lat = parseFloat(addressData[0].lat);
     const lon = parseFloat(addressData[0].lon);
 
-    // Get building data from user images
-    const buildingData = await getBuildingDataFromUserImages(photos, retryPhotos, bucket);
+    // Get building data (simplified without OpenCV)
+    const buildingData = await getBuildingDataFromUserImages(photos, retryPhotos);
     const measurements = buildingData.measurements;
     const roofInfo = buildingData.roofInfo;
     const isMeasurementsReliable = buildingData.isReliable;
@@ -211,47 +210,56 @@ function getLocationMultiplier(addressData) {
   return { multiplierLow, multiplierHigh };
 }
 
-async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
+async function getBuildingDataFromUserImages(photos, retryPhotos) {
   const directions = ["north", "south", "east", "west"];
   let width = 40, length = 32, area = 1280, isReliable = false;
   let pitch = "6/12", height = 16, roofArea = 1431, roofMaterial = "Asphalt Shingles";
 
-  let roofImage = null;
+  // Use Google Vision API to estimate building dimensions
+  let scaleFactor = null;
   for (const direction of directions) {
     const images = (retryPhotos && retryPhotos[direction] && retryPhotos[direction].length > 0) ? retryPhotos[direction] : photos[direction] || [];
     for (const image of images) {
       try {
         const base64Image = image.split(",")[1];
-        const img = cv.imdecode(Buffer.from(base64Image, "base64"));
-        const gray = img.cvtColor(cv.COLOR_BGR2GRAY);
-        const edges = gray.canny(50, 150);
-        const contours = edges.findContours(cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
-
-        let roofDetected = false;
-        let maxArea = 0;
-        let roofContour = null;
-        for (const contour of contours) {
-          const area = contour.area;
-          if (area > maxArea && area > 1000) {
-            maxArea = area;
-            roofContour = contour;
-            roofDetected = true;
+        const visionResponse = await fetch(
+          `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              requests: [
+                {
+                  image: { content: base64Image },
+                  features: [{ type: "OBJECT_LOCALIZATION" }],
+                },
+              ],
+            }),
           }
-        }
+        );
 
-        if (roofDetected) {
-          roofImage = { image, contour: roofContour, direction };
+        if (!visionResponse.ok) continue;
+
+        const visionData = await visionResponse.json();
+        const objects = visionData.responses[0]?.localizedObjectAnnotations || [];
+        const door = objects.find(obj => obj.name.toLowerCase().includes("door") && obj.score > 0.5);
+
+        if (door) {
+          const vertices = door.boundingPoly.normalizedVertices;
+          const pixelWidth = Math.abs(vertices[1].x - vertices[0].x) * 600; // Assume 600px image width
+          const doorWidthFeet = 3; // Standard door width
+          scaleFactor = doorWidthFeet / pixelWidth;
           break;
         }
       } catch (error) {
-        console.error(`Backend - Error processing image for roof detection in ${direction}:`, error);
+        console.error(`Backend - Error scaling image in ${direction}:`, error);
       }
     }
-    if (roofImage) break;
+    if (scaleFactor) break;
   }
 
-  if (roofImage) {
-    let scaleFactor = null;
+  if (scaleFactor) {
+    // Use Google Vision API to detect building footprint
     for (const direction of directions) {
       const images = (retryPhotos && retryPhotos[direction] && retryPhotos[direction].length > 0) ? retryPhotos[direction] : photos[direction] || [];
       for (const image of images) {
@@ -277,55 +285,29 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
 
           const visionData = await visionResponse.json();
           const objects = visionData.responses[0]?.localizedObjectAnnotations || [];
-          const door = objects.find(obj => obj.name.toLowerCase().includes("door") && obj.score > 0.5);
+          const building = objects.find(obj => (obj.name.toLowerCase().includes("house") || obj.name.toLowerCase().includes("building")) && obj.score > 0.5);
 
-          if (door) {
-            const vertices = door.boundingPoly.normalizedVertices;
-            const pixelWidth = Math.abs(vertices[1].x - vertices[0].x) * 600;
-            const doorWidthFeet = 3;
-            scaleFactor = doorWidthFeet / pixelWidth;
+          if (building) {
+            const vertices = building.boundingPoly.normalizedVertices;
+            const pixelArea = Math.abs(vertices[1].x - vertices[0].x) * Math.abs(vertices[2].y - vertices[0].y) * 600 * 600;
+            area = Math.round(pixelArea * scaleFactor * scaleFactor);
+            width = Math.round(Math.sqrt(area) * 1.25);
+            length = Math.round(area / width);
+            isReliable = true;
+
+            if (area < 500 || area > 5000) {
+              width = 40;
+              length = 32;
+              area = 1280;
+              isReliable = false;
+            }
             break;
           }
         } catch (error) {
-          console.error(`Backend - Error scaling image in ${direction}:`, error);
+          console.error(`Backend - Error estimating building dimensions in ${direction}:`, error);
         }
       }
-      if (scaleFactor) break;
-    }
-
-    if (scaleFactor) {
-      const pixelArea = roofImage.contour.area;
-      area = Math.round(pixelArea * scaleFactor * scaleFactor);
-      width = Math.round(Math.sqrt(area) * 1.25);
-      length = Math.round(area / width);
-      isReliable = true;
-
-      if (area < 500 || area > 5000) {
-        width = 40;
-        length = 32;
-        area = 1280;
-        isReliable = false;
-      }
-    }
-
-    try {
-      const base64Image = roofImage.image.split(",")[1];
-      const img = cv.imdecode(Buffer.from(base64Image, "base64"));
-      const gray = img.cvtColor(cv.COLOR_BGR2GRAY);
-      const edges = gray.canny(50, 150);
-      const lines = edges.houghLinesP(0.1, Math.PI / 180, 50, 50, 10);
-
-      let steepestAngle = 0;
-      for (const line of lines) {
-        const angle = Math.atan2(line.y2 - line.y1, line.x2 - line.x1) * 180 / Math.PI;
-        if (Math.abs(angle) > steepestAngle) steepestAngle = Math.abs(angle);
-      }
-
-      if (steepestAngle > 45) pitch = "8/12";
-      else if (steepestAngle > 30) pitch = "6/12";
-      else pitch = "4/12";
-    } catch (error) {
-      console.error("Backend - Error estimating roof pitch:", error);
+      if (isReliable) break;
     }
   }
 
@@ -337,7 +319,7 @@ async function getBuildingDataFromUserImages(photos, retryPhotos, bucket) {
 
   const buildingData = {
     measurements: { width, length, area },
-    roofInfo: { pitch, height: Math.round(height), roofArea: Math.round(roofArea), roofMaterial, isPitchReliable: !!roofImage, pitchSource: roofImage ? "user_image" : "default" },
+    roofInfo: { pitch, height: Math.round(height), roofArea: Math.round(roofArea), roofMaterial, isPitchReliable: false, pitchSource: "default" },
     isReliable,
   };
 
@@ -509,7 +491,7 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
 
   // Updated cost ranges for 2025 (adjusted for inflation and market trends)
   const costRanges = {
-    siding: { materialLow: 7, materialHigh: 12, laborLow: 4, laborHigh: 6 }, // Increased due to material cost rise
+    siding: { materialLow: 7, materialHigh: 12, laborLow: 4, laborHigh: 6 },
     paint: { materialLow: 35, materialHigh: 55, laborLow: 1.5, laborHigh: 3 },
     window: { materialLow: 450, materialHigh: 800, laborLow: 200, laborHigh: 350 },
     door: { materialLow: 900, materialHigh: 1400, laborLow: 300, laborHigh: 500 },
