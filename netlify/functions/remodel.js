@@ -30,18 +30,27 @@ exports.handler = async (event) => {
       throw new Error("Invalid request body: Failed to parse JSON");
     }
 
-    const { address, photos, windowCount, doorCount, windowSizes, doorSizes } = body;
+    const { address, components, photos, windowCount, doorCount } = body;
 
     if (!address) {
       throw new Error("Missing address in request body");
     }
 
-    if (windowCount === undefined || windowCount < 0) {
-      throw new Error("Window count is required and must be 0 or greater");
+    if (!Array.isArray(components) || components.length === 0) {
+      throw new Error("Components must be a non-empty array (e.g., ['roof', 'windows', 'doors', 'siding'])");
     }
 
-    if (doorCount === undefined || doorCount < 0) {
-      throw new Error("Door count is required and must be 0 or greater");
+    const validComponents = ["roof", "windows", "doors", "siding"];
+    if (!components.every(comp => validComponents.includes(comp))) {
+      throw new Error("Invalid component(s) provided. Must be one or more of: roof, windows, doors, siding");
+    }
+
+    if (components.includes("windows") && (windowCount === undefined || windowCount < 0)) {
+      throw new Error("Window count is required and must be 0 or greater when estimating windows");
+    }
+
+    if (components.includes("doors") && (doorCount === undefined || doorCount < 0)) {
+      throw new Error("Door count is required and must be 0 or greater when estimating doors");
     }
 
     // Validate photo arrays
@@ -81,10 +90,8 @@ exports.handler = async (event) => {
 
     // Use provided window and door counts
     const windowDoorCount = {
-      windows: windowCount,
-      doors: doorCount,
-      windowSizes: windowSizes || [],
-      doorSizes: doorSizes || [],
+      windows: components.includes("windows") ? windowCount : 0,
+      doors: components.includes("doors") ? doorCount : 0,
       isReliable: true, // Since counts are provided manually
     };
 
@@ -102,13 +109,11 @@ exports.handler = async (event) => {
     if (totalImages === 0) {
       const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
       if (GOOGLE_MAPS_API_KEY) {
-        // First, check if Street View is available at this location using the Street View Metadata API
         const metadataUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
         const metadataResponse = await fetch(metadataUrl);
         if (metadataResponse.ok) {
           const metadata = await metadataResponse.json();
           if (metadata.status === "OK") {
-            // Street View is available, fetch the image
             streetViewImage = `https://maps.googleapis.com/maps/api/streetview?size=600x400&location=${lat},${lon}&fov=90&heading=235&pitch=10&key=${GOOGLE_MAPS_API_KEY}`;
           } else {
             console.log(`Backend - Street View not available at ${lat},${lon}:`, metadata.status);
@@ -119,10 +124,10 @@ exports.handler = async (event) => {
       }
     }
 
-    // Calculate estimates
-    const materialEstimates = calculateMaterialEstimates(measurements, windowDoorCount, roofInfo);
-    const costEstimates = calculateCostEstimates(materialEstimates, windowDoorCount, measurements.area, addressData);
-    const timelineEstimate = calculateTimeline(measurements.area, windowDoorCount);
+    // Calculate estimates based on selected components
+    const materialEstimates = calculateMaterialEstimates(measurements, windowDoorCount, roofInfo, components);
+    const costEstimates = calculateCostEstimates(materialEstimates, windowDoorCount, measurements.area, addressData, components);
+    const timelineEstimate = calculateTimeline(measurements.area, windowDoorCount, components);
 
     console.log("Backend - Material Estimates:", materialEstimates);
     console.log("Backend - Cost Estimates:", costEstimates);
@@ -131,6 +136,7 @@ exports.handler = async (event) => {
     // Save to Firestore
     const remodelEntry = {
       address: addressData[0].display_name,
+      components,
       measurements,
       windowDoorCount,
       materialEstimates,
@@ -142,7 +148,6 @@ exports.handler = async (event) => {
       streetViewImage,
       lat,
       lon,
-      timestamp: admin.firestore.FieldValue.serverTimestamp(),
     };
 
     const docRef = await db.collection("remodels").add(remodelEntry);
@@ -372,23 +377,40 @@ async function saveImagesToStorage(photos, bucket) {
   return { processedImages, allUploadedImages };
 }
 
-function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo) {
+function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo, components) {
   const { area } = measurements;
-  const { windows, doors, windowSizes, doorSizes } = windowDoorCount;
+  const { windows, doors } = windowDoorCount;
   const { roofArea, roofMaterial } = roofInfo;
 
-  const sidingArea = area * 1.1;
-  const siding = `Siding: ${Math.round(sidingArea)} sq ft`;
-  const paintGallons = Math.ceil((area * 2) / 400);
-  const paint = `Exterior Paint: ${paintGallons} gallons`;
-  const windowEstimates = windowSizes.map((size, index) => `Window ${index + 1}: ${size}`);
-  const doorEstimates = doorSizes.map((size, index) => `Door ${index + 1}: ${size}`);
-  const roofing = `Roofing (${roofMaterial}): ${Math.round(roofArea)} sq ft`;
+  const materialEstimates = [];
 
-  return [siding, paint, ...windowEstimates, ...doorEstimates, roofing];
+  if (components.includes("siding")) {
+    const sidingArea = area * 1.1;
+    materialEstimates.push(`Siding: ${Math.round(sidingArea)} sq ft`);
+    const paintGallons = Math.ceil((area * 2) / 400);
+    materialEstimates.push(`Exterior Paint: ${paintGallons} gallons`);
+  }
+
+  if (components.includes("windows")) {
+    for (let i = 0; i < windows; i++) {
+      materialEstimates.push(`Window ${i + 1}`);
+    }
+  }
+
+  if (components.includes("doors")) {
+    for (let i = 0; i < doors; i++) {
+      materialEstimates.push(`Door ${i + 1}`);
+    }
+  }
+
+  if (components.includes("roof")) {
+    materialEstimates.push(`Roofing (${roofMaterial}): ${Math.round(roofArea)} sq ft`);
+  }
+
+  return materialEstimates.length > 0 ? materialEstimates : ["No materials estimated for the selected components"];
 }
 
-function calculateCostEstimates(materialEstimates, windowDoorCount, area, addressData) {
+function calculateCostEstimates(materialEstimates, windowDoorCount, area, addressData, components) {
   let totalCostLow = 0;
   let totalCostHigh = 0;
   const costBreakdown = [];
@@ -398,7 +420,7 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
     siding: { materialLow: 7, materialHigh: 12, laborLow: 4, laborHigh: 6 },
     paint: { materialLow: 35, materialHigh: 55, laborLow: 1.5, laborHigh: 3 },
     window: { materialLow: 450, materialHigh: 800, laborLow: 200, laborHigh: 350 },
-    door: { materialLow: 900, materialHigh: 1400, laborLow: 300, laborHigh: 500 },
+    door: { materialLow: 1200, materialHigh: 5000, laborLow: 400, laborHigh: 1200 }, // Updated for larger doors like French doors
     roofing: { materialLow: 3, materialHigh: 5, laborLow: 2.5, laborHigh: 4 },
   };
 
@@ -406,7 +428,7 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
 
   materialEstimates.forEach(item => {
     try {
-      if (item.includes("Siding")) {
+      if (item.includes("Siding") && components.includes("siding")) {
         const sidingArea = parseInt(item.match(/\d+/)[0]);
         const materialCostLow = sidingArea * (costRanges.siding?.materialLow || 0) * multiplierLow;
         const materialCostHigh = sidingArea * (costRanges.siding?.materialHigh || 0) * multiplierHigh;
@@ -418,7 +440,7 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
           `Siding Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${sidingArea} sq ft at $${costRanges.siding?.materialLow || 0}–$${costRanges.siding?.materialHigh || 0}/sq ft)`,
           `Siding Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${sidingArea} sq ft at $${costRanges.siding?.laborLow || 0}–$${costRanges.siding?.laborHigh || 0}/sq ft)`
         );
-      } else if (item.includes("Exterior Paint")) {
+      } else if (item.includes("Exterior Paint") && components.includes("siding")) {
         const gallons = parseInt(item.match(/\d+/)[0]);
         const materialCostLow = gallons * (costRanges.paint?.materialLow || 0) * multiplierLow;
         const materialCostHigh = gallons * (costRanges.paint?.materialHigh || 0) * multiplierHigh;
@@ -430,7 +452,7 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
           `Exterior Paint Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${gallons} gallons at $${costRanges.paint?.materialLow || 0}–$${costRanges.paint?.materialHigh || 0}/gallon)`,
           `Exterior Paint Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${area} sq ft at $${costRanges.paint?.laborLow || 0}–$${costRanges.paint?.laborHigh || 0}/sq ft)`
         );
-      } else if (item.includes("Window")) {
+      } else if (item.includes("Window") && components.includes("windows")) {
         const materialCostLow = (costRanges.window?.materialLow || 0) * multiplierLow;
         const materialCostHigh = (costRanges.window?.materialHigh || 0) * multiplierHigh;
         const laborCostLow = (costRanges.window?.laborLow || 0) * multiplierLow;
@@ -441,7 +463,7 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
           `${item} Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)}`,
           `${item} Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)}`
         );
-      } else if (item.includes("Door")) {
+      } else if (item.includes("Door") && components.includes("doors")) {
         const materialCostLow = (costRanges.door?.materialLow || 0) * multiplierLow;
         const materialCostHigh = (costRanges.door?.materialHigh || 0) * multiplierHigh;
         const laborCostLow = (costRanges.door?.laborLow || 0) * multiplierLow;
@@ -452,7 +474,7 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
           `${item} Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)}`,
           `${item} Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)}`
         );
-      } else if (item.includes("Roofing")) {
+      } else if (item.includes("Roofing") && components.includes("roof")) {
         const roofArea = parseInt(item.match(/\d+/)[0]);
         const materialCostLow = roofArea * (costRanges.roofing?.materialLow || 0) * multiplierLow;
         const materialCostHigh = roofArea * (costRanges.roofing?.materialHigh || 0) * multiplierHigh;
@@ -474,9 +496,22 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
   return { totalCostLow: Math.round(totalCostLow), totalCostHigh: Math.round(totalCostHigh), costBreakdown };
 }
 
-function calculateTimeline(area, windowDoorCount) {
-  let weeks = Math.ceil(area / 500);
-  const additionalDays = (windowDoorCount.windows + windowDoorCount.doors);
-  weeks += Math.ceil(additionalDays / 5);
-  return weeks;
+function calculateTimeline(area, windowDoorCount, components) {
+  let weeks = 0;
+  const { windows, doors } = windowDoorCount;
+
+  if (components.includes("siding")) {
+    weeks += Math.ceil(area / 500); // Base timeline for siding
+  }
+
+  if (components.includes("roof")) {
+    weeks += Math.ceil(area / 500); // Similar timeline for roofing
+  }
+
+  if (components.includes("windows") || components.includes("doors")) {
+    const additionalDays = (windows + doors);
+    weeks += Math.ceil(additionalDays / 5); // 1 week per 5 windows/doors
+  }
+
+  return Math.max(weeks, 1); // Ensure at least 1 week
 }
