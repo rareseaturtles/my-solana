@@ -2,7 +2,6 @@ const admin = require("firebase-admin");
 
 exports.handler = async (event) => {
   try {
-    // Initialize Firebase Admin
     if (!admin.apps.length) {
       admin.initializeApp({
         credential: admin.credential.cert({
@@ -17,7 +16,6 @@ exports.handler = async (event) => {
     const storage = admin.storage();
     const bucket = storage.bucket("turtle-treasure-giveaway.appspot.com");
 
-    // Validate request body
     if (!event.body) {
       throw new Error("Missing request body");
     }
@@ -52,7 +50,6 @@ exports.handler = async (event) => {
       throw new Error("Door count is required and must be 0 or greater when estimating doors");
     }
 
-    // Validate photo arrays
     const directions = ["north", "south", "east", "west"];
     for (const direction of directions) {
       if (photos[direction] && !Array.isArray(photos[direction])) {
@@ -64,7 +61,6 @@ exports.handler = async (event) => {
       .flatMap(direction => photos[direction] || [])
       .filter(image => image && typeof image === "string" && image.startsWith("data:image/")).length;
 
-    // Validate address using OpenStreetMap
     const addressResponse = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
       { headers: { "User-Agent": "IndyHomeImprovements/1.0" } }
@@ -81,20 +77,17 @@ exports.handler = async (event) => {
     const lat = parseFloat(addressData[0].lat);
     const lon = parseFloat(addressData[0].lon);
 
-    // Get building data using Google Vision API for dimensions if photos are provided
     const buildingData = await getBuildingDataFromUserImages(photos, lat, lon, addressData);
     const measurements = buildingData.measurements;
     const roofInfo = buildingData.roofInfo;
     const isMeasurementsReliable = buildingData.isReliable;
 
-    // Use provided window and door counts
     const windowDoorCount = {
       windows: components.includes("windows") ? windowCount : 0,
       doors: components.includes("doors") ? doorCount : 0,
-      isReliable: true, // Since counts are provided manually
+      isReliable: true,
     };
 
-    // Save images to Firebase Storage if photos are provided
     let processedImages = {};
     let allUploadedImages = {};
     if (totalImages > 0) {
@@ -103,12 +96,10 @@ exports.handler = async (event) => {
       allUploadedImages = imageData.allUploadedImages;
     }
 
-    // Fetch Satellite View image if no photos are provided
     let satelliteViewImage = null;
     if (totalImages === 0) {
       const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
       if (GOOGLE_MAPS_API_KEY) {
-        // Fetch a higher-resolution satellite image for potential analysis
         satelliteViewImage = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=19&size=800x600&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
         console.log(`Backend - Fetched satellite view image for ${lat},${lon}`);
       } else {
@@ -116,7 +107,6 @@ exports.handler = async (event) => {
       }
     }
 
-    // Calculate estimates based on selected components
     const materialEstimates = calculateMaterialEstimates(measurements, windowDoorCount, roofInfo, components);
     const costEstimates = calculateCostEstimates(materialEstimates, windowDoorCount, measurements.area, addressData, components);
     const timelineEstimate = calculateTimeline(measurements.area, windowDoorCount, components);
@@ -125,7 +115,6 @@ exports.handler = async (event) => {
     console.log("Backend - Cost Estimates:", costEstimates);
     console.log("Backend - Timeline Estimate:", timelineEstimate);
 
-    // Save to Firestore
     const remodelEntry = {
       address: addressData[0].display_name,
       components,
@@ -175,7 +164,6 @@ exports.handler = async (event) => {
   }
 };
 
-// Helper function to determine location-based cost multiplier
 function getLocationMultiplier(addressData) {
   const address = addressData[0]?.display_name?.toLowerCase() || "";
   let multiplierLow = 0.9;
@@ -199,18 +187,16 @@ function getLocationMultiplier(addressData) {
   return { multiplierLow, multiplierHigh };
 }
 
-// Helper function to estimate average home size based on location
 function getAverageHomeSize(addressData) {
   const address = addressData[0]?.display_name?.toLowerCase() || "";
-  let averageArea = 1500; // Default average home size in the U.S. (2025 estimate)
+  let averageArea = 1500;
 
-  // Adjust based on regional averages (approximations for 2025)
   if (address.includes("california") || address.includes("new york")) {
-    averageArea = 1800; // Higher due to urban density and larger homes in some areas
+    averageArea = 1800;
   } else if (address.includes("indiana") || address.includes("ohio")) {
-    averageArea = 1400; // Slightly below national average
+    averageArea = 1400;
   } else if (address.includes("texas") || address.includes("florida")) {
-    averageArea = 1600; // Larger homes common in suburban areas
+    averageArea = 1600;
   }
 
   console.log(`Backend - Estimated average home size for ${address}: ${averageArea} sqft`);
@@ -227,21 +213,85 @@ async function getBuildingDataFromUserImages(photos, lat, lon, addressData) {
     .filter(image => image && typeof image === "string" && image.startsWith("data:image/")).length;
 
   if (totalImages === 0) {
-    // No user photos provided, attempt to estimate using regional averages and satellite imagery
     const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
     if (GOOGLE_MAPS_API_KEY) {
       console.log(`Backend - Attempting to estimate area using satellite imagery for ${lat},${lon}`);
-      // Note: Automated roof measurement from satellite imagery requires advanced AI.
-      // Consider integrating with a third-party service like Sky Roof Measure or GAF QuickMeasure
-      // for accurate roof measurements. For now, we'll use a regional average as a placeholder.
-      area = getAverageHomeSize(addressData);
-      width = Math.round(Math.sqrt(area) * 1.25);
-      length = Math.round(area / width);
-      isReliable = false; // Mark as unreliable until a proper solution is implemented
-      console.log(`Backend - Using regional average estimate: ${area} sqft (recommended to use a service like Sky Roof Measure for accuracy)`);
+      const satelliteImageUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=19&size=800x600&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
+
+      // Fetch the satellite image as a buffer
+      const imageResponse = await fetch(satelliteImageUrl);
+      if (!imageResponse.ok) {
+        console.warn(`Backend - Failed to fetch satellite image: ${imageResponse.statusText}`);
+        area = getAverageHomeSize(addressData);
+        width = Math.round(Math.sqrt(area) * 1.25);
+        length = Math.round(area / width);
+      } else {
+        const imageBuffer = await imageResponse.arrayBuffer();
+        const base64Image = Buffer.from(imageBuffer).toString("base64");
+
+        // Analyze the satellite image using Google Vision API
+        const visionResponse = await fetch(
+          `https://vision.googleapis.com/v1/images:annotate?key=${process.env.GOOGLE_VISION_API_KEY}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              requests: [
+                {
+                  image: { content: base64Image },
+                  features: [{ type: "OBJECT_LOCALIZATION" }],
+                },
+              ],
+            }),
+          }
+        );
+
+        if (!visionResponse.ok) {
+          console.warn(`Backend - Vision API failed: ${await visionResponse.text()}`);
+          area = getAverageHomeSize(addressData);
+          width = Math.round(Math.sqrt(area) * 1.25);
+          length = Math.round(area / width);
+        } else {
+          const visionData = await visionResponse.json();
+          const objects = visionData.responses[0]?.localizedObjectAnnotations || [];
+          const building = objects.find(obj => (obj.name.toLowerCase().includes("house") || obj.name.toLowerCase().includes("building")) && obj.score > 0.5);
+
+          if (building) {
+            // Calculate the building footprint area in pixels
+            const vertices = building.boundingPoly.normalizedVertices;
+            const pixelWidth = Math.abs(vertices[1].x - vertices[0].x) * 800; // Image width in pixels
+            const pixelHeight = Math.abs(vertices[2].y - vertices[0].y) * 600; // Image height in pixels
+            const pixelArea = pixelWidth * pixelHeight;
+
+            // Estimate scale factor (meters per pixel) based on zoom level 19
+            // At zoom level 19, 1 pixel ≈ 0.15 meters (approximation based on typical Google Maps scale)
+            const metersPerPixel = 0.15;
+            const areaMeters = pixelArea * metersPerPixel * metersPerPixel;
+            area = Math.round(areaMeters * 10.7639); // Convert square meters to square feet
+
+            // Ensure the area is within reasonable bounds
+            if (area < 500 || area > 5000) {
+              console.warn(`Backend - Estimated area ${area} sqft out of bounds, using regional average`);
+              area = getAverageHomeSize(addressData);
+              isReliable = false;
+            } else {
+              isReliable = true;
+            }
+
+            width = Math.round(Math.sqrt(area) * 1.25);
+            length = Math.round(area / width);
+            console.log(`Backend - Satellite image analysis estimated area: ${area} sqft`);
+          } else {
+            console.warn(`Backend - No building detected in satellite image, using regional average`);
+            area = getAverageHomeSize(addressData);
+            width = Math.round(Math.sqrt(area) * 1.25);
+            length = Math.round(area / width);
+          }
+        }
+      }
     } else {
       console.warn("Backend - GOOGLE_MAPS_API_KEY not set, using default area estimate.");
-      area = 1500; // Fallback default
+      area = getAverageHomeSize(addressData);
       width = Math.round(Math.sqrt(area) * 1.25);
       length = Math.round(area / width);
     }
@@ -259,7 +309,7 @@ async function getBuildingDataFromUserImages(photos, lat, lon, addressData) {
     };
   }
 
-  // Use Google Vision API to estimate building dimensions from user-uploaded photos
+  // Use Google Vision API for user-uploaded photos (unchanged)
   let scaleFactor = null;
   for (const direction of directions) {
     const images = photos[direction] || [];
@@ -290,8 +340,8 @@ async function getBuildingDataFromUserImages(photos, lat, lon, addressData) {
 
         if (door) {
           const vertices = door.boundingPoly.normalizedVertices;
-          const pixelWidth = Math.abs(vertices[1].x - vertices[0].x) * 600; // Assume 600px image width
-          const doorWidthFeet = 3; // Standard door width
+          const pixelWidth = Math.abs(vertices[1].x - vertices[0].x) * 600;
+          const doorWidthFeet = 3;
           scaleFactor = doorWidthFeet / pixelWidth;
           break;
         }
@@ -355,7 +405,6 @@ async function getBuildingDataFromUserImages(photos, lat, lon, addressData) {
   }
 
   if (!area) {
-    // Fallback if Vision API fails
     area = getAverageHomeSize(addressData);
     width = Math.round(Math.sqrt(area) * 1.25);
     length = Math.round(area / width);
@@ -421,7 +470,9 @@ function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo, com
   const materialEstimates = [];
 
   if (components.includes("siding")) {
-    const sidingArea = area * 1.1;
+    // Estimate siding area: Perimeter * Height (assume 10 ft height for single-story)
+    const perimeter = 2 * (measurements.width + measurements.length);
+    const sidingArea = perimeter * 10 * 1.1; // 10 ft height, 10% extra for waste
     materialEstimates.push(`Siding: ${Math.round(sidingArea)} sq ft`);
   }
 
