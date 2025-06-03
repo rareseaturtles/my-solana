@@ -350,64 +350,69 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
   const { multiplierLow, multiplierHigh } = getLocationMultiplier(addressData);
 
   materialEstimates.forEach(item => {
-    if (item.includes("Siding")) {
-      const sidingArea = parseInt(item.match(/\d+/)[0]);
-      const materialCostLow = sidingArea * costRanges.siding.materialLow * multiplierLow;
-      const materialCostHigh = sidingArea * costRanges.siding.materialHigh * multiplierHigh;
-      const laborCostLow = sidingArea * costRanges.siding.laborLow * multiplierLow;
-      const laborCostHigh = sidingArea * costRanges.siding.laborHigh * multiplierHigh;
-      totalCostLow += materialCostLow + laborCostLow;
-      totalCostHigh += materialCostHigh + laborCostHigh;
-      costBreakdown.push(
-        `Siding Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${sidingArea} sq ft at $${costRanges.siding.materialLow}–$${costRanges.siding.materialHigh}/sq ft)`,
-        `Siding Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${sidingArea} sq ft at $${costRanges.siding.laborLow}–$${costRanges.siding.laborHigh}/sq ft)`
-      );
-    } else if (item.includes("Exterior Paint")) {
-      const gallons = parseInt(item.match(/\d+/)[0]);
-      const materialCostLow = gallons * costRanges.paint.materialLow * multiplierLow;
-      const materialCostHigh = gallons * costRanges.paint.materialHigh * multiplierHigh;
-      const laborCostLow = area * costRanges.paint.laborLow * multiplierLow;
-      const laborCostHigh = area * costRanges.paint.laborHigh * multiplierHigh;
-      totalCostLow += materialCostLow + laborCostLow;
-      totalCostHigh += materialCostHigh + laborCostHigh;
-      costBreakdown.push(
-        `Exterior Paint Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${gallons} gallons at $${costRanges.paint.materialLow}–$${costRanges.paint.materialHigh}/gallon)`,
-        `Exterior Paint Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${area} sq ft at $${costRanges.paint.laborLow}–$${costRanges.paint.laborHigh}/sq ft)`
-      );
-    } else if (item.includes("Window")) {
-      const materialCostLow = costRanges.window.materialLow * multiplierLow;
-      const materialCostHigh = costRanges.window.materialHigh * multiplierHigh;
-      const laborCostLow = costRanges.window.laborLow * multiplierLow;
-      const laborCostHigh = costRanges.window.laborHigh * multiplierHigh;
-      totalCostLow += materialCostLow + laborCostLow;
-      totalCostHigh += materialCostHigh + laborCostHigh;
-      costBreakdown.push(
-        `${item} Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)}`,
-        `${item} Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)}`
-      );
-    } else if (item.includes("Door")) {
-      const materialCostLow = costRanges.door.materialLow * multiplierLow;
-      const materialCostHigh = costRanges.door.materialHigh * multiplierHigh;
-      const laborCostLow = costRanges.dor.laborLow * multiplierLow;
-      const laborCostHigh = costRanges.door.laborHigh * multiplierHigh;
-      totalCostLow += materialCostLow + laborCostLow;
-      totalCostHigh += materialCostHigh + laborCostHigh;
-      costBreakdown.push(
-        `${item} Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)}`,
-        `${item} Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)}`
-      );
-    } else if (item.includes("Roofing")) {
-      const roofArea = parseInt(item.match(/\d+/)[0]);
-      const materialCostLow = roofArea * costRanges.roofing.materialLow * multiplierLow;
-      const materialCostHigh = roofArea * costRanges.roofing.materialHigh * multiplierHigh;
-      const laborCostLow = roofArea * costRanges.roofing.laborLow * multiplierLow;
-      const laborCostHigh = roofArea * costRanges.roofing.laborHigh * multiplierHigh;
-      totalCostLow += materialCostLow + laborCostLow;
-      totalCostHigh += materialCostHigh + laborCostHigh;
-      costBreakdown.push(
-        `Roofing Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${roofArea} sq ft at $${costRanges.roofing.materialLow}–$${costRanges.roofing.materialHigh}/sq ft)`,
-        `Roofing Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${roofArea} sq ft at $${costRanges.roofing.laborLow}–$${costRanges.roofing.laborHigh}/sq ft)`
-      );
+    try {
+      if (item.includes("Siding")) {
+        const sidingArea = parseInt(item.match(/\d+/)[0]);
+        const materialCostLow = sidingArea * (costRanges.siding?.materialLow || 0) * multiplierLow;
+        const materialCostHigh = sidingArea * (costRanges.siding?.materialHigh || 0) * multiplierHigh;
+        const laborCostLow = sidingArea * (costRanges.siding?.laborLow || 0) * multiplierLow;
+        const laborCostHigh = sidingArea * (costRanges.siding?.laborHigh || 0) * multiplierHigh;
+        totalCostLow += materialCostLow + laborCostLow;
+        totalCostHigh += materialCostHigh + laborCostHigh;
+        costBreakdown.push(
+          `Siding Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${sidingArea} sq ft at $${costRanges.siding?.materialLow || 0}–$${costRanges.siding?.materialHigh || 0}/sq ft)`,
+          `Siding Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${sidingArea} sq ft at $${costRanges.siding?.laborLow || 0}–$${costRanges.siding?.laborHigh || 0}/sq ft)`
+        );
+      } else if (item.includes("Exterior Paint")) {
+        const gallons = parseInt(item.match(/\d+/)[0]);
+        const materialCostLow = gallons * (costRanges.paint?.materialLow || 0) * multiplierLow;
+        const materialCostHigh = gallons * (costRanges.paint?.materialHigh || 0) * multiplierHigh;
+        const laborCostLow = area * (costRanges.paint?.laborLow || 0) * multiplierLow;
+        const laborCostHigh = area * (costRanges.paint?.laborHigh || 0) * multiplierHigh;
+        totalCostLow += materialCostLow + laborCostLow;
+        totalCostHigh += materialCostHigh + laborCostHigh;
+        costBreakdown.push(
+          `Exterior Paint Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${gallons} gallons at $${costRanges.paint?.materialLow || 0}–$${costRanges.paint?.materialHigh || 0}/gallon)`,
+          `Exterior Paint Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${area} sq ft at $${costRanges.paint?.laborLow || 0}–$${costRanges.paint?.laborHigh || 0}/sq ft)`
+        );
+      } else if (item.includes("Window")) {
+        const materialCostLow = (costRanges.window?.materialLow || 0) * multiplierLow;
+        const materialCostHigh = (costRanges.window?.materialHigh || 0) * multiplierHigh;
+        const laborCostLow = (costRanges.window?.laborLow || 0) * multiplierLow;
+        const laborCostHigh = (costRanges.window?.laborHigh || 0) * multiplierHigh;
+        totalCostLow += materialCostLow + laborCostLow;
+        totalCostHigh += materialCostHigh + laborCostHigh;
+        costBreakdown.push(
+          `${item} Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)}`,
+          `${item} Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)}`
+        );
+      } else if (item.includes("Door")) {
+        const materialCostLow = (costRanges.door?.materialLow || 0) * multiplierLow;
+        const materialCostHigh = (costRanges.door?.materialHigh || 0) * multiplierHigh;
+        const laborCostLow = (costRanges.door?.laborLow || 0) * multiplierLow;
+        const laborCostHigh = (costRanges.door?.laborHigh || 0) * multiplierHigh;
+        totalCostLow += materialCostLow + laborCostLow;
+        totalCostHigh += materialCostHigh + laborCostHigh;
+        costBreakdown.push(
+          `${item} Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)}`,
+          `${item} Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)}`
+        );
+      } else if (item.includes("Roofing")) {
+        const roofArea = parseInt(item.match(/\d+/)[0]);
+        const materialCostLow = roofArea * (costRanges.roofing?.materialLow || 0) * multiplierLow;
+        const materialCostHigh = roofArea * (costRanges.roofing?.materialHigh || 0) * multiplierHigh;
+        const laborCostLow = roofArea * (costRanges.roofing?.laborLow || 0) * multiplierLow;
+        const laborCostHigh = roofArea * (costRanges.roofing?.laborHigh || 0) * multiplierHigh;
+        totalCostLow += materialCostLow + laborCostLow;
+        totalCostHigh += materialCostHigh + laborCostHigh;
+        costBreakdown.push(
+          `Roofing Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${roofArea} sq ft at $${costRanges.roofing?.materialLow || 0}–$${costRanges.roofing?.materialHigh || 0}/sq ft)`,
+          `Roofing Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${roofArea} sq ft at $${costRanges.roofing?.laborLow || 0}–$${costRanges.roofing?.laborHigh || 0}/sq ft)`
+        );
+      }
+    } catch (error) {
+      console.error(`Backend - Error calculating cost for item "${item}":`, error);
+      costBreakdown.push(`Error calculating cost for ${item}: ${error.message}`);
     }
   });
 
