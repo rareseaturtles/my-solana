@@ -126,7 +126,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     if (photos[direction].length > 1) {
       displayWarning(`Multiple images uploaded for ${direction}. Only the first image will be processed for analysis, but all images will be saved.`);
     }
-    document.getElementById(`${direction}Retry`).style.display = "none"; // Reset retry prompts
+    document.getElementById(`${direction}Retry`).style.display = "none";
   }
 
   // Convert photos to base64
@@ -216,6 +216,8 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       throw new Error(`Failed to parse response as JSON: ${text}`);
     }
 
+    console.log("Server response:", result); // Debug log
+
     if (result.error) throw new Error(result.error);
 
     if (result.retryDirections && result.retryDirections.length > 0) {
@@ -236,16 +238,11 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const windowDoorCount = result.windowDoorCount || { windows: 0, doors: 0, windowSizes: [], doorSizes: [], isReliable: false };
     const isWindowDoorCountReliable = windowDoorCount.isReliable || false;
     const materialEstimates = result.materialEstimates || ["No estimates available"];
-    const costEstimates = result.costEstimates || { totalCostLow: "N/A", totalCostHigh: "N/A", costBreakdown: ["No cost breakdown available"] };
+    const costEstimates = result.costEstimates || { totalCostLow: 0, totalCostHigh: 0, costBreakdown: ["No cost breakdown available"] };
     const timelineEstimate = result.timelineEstimate || "N/A";
     const roofInfo = result.roofInfo || { pitch: "N/A", height: "N/A", roofArea: "N/A", roofMaterial: "N/A", isPitchReliable: false, pitchSource: "default" };
     const processedImages = result.processedImages || {};
     const allUploadedImages = result.allUploadedImages || {};
-    const satelliteImage = result.satelliteImage || null;
-    const satelliteImageError = result.satelliteImageError || null;
-    const usedStreetView = result.usedStreetView || false;
-    const streetViewStatus = result.streetViewStatus || "not_used";
-    const streetViewRoofPitchStatus = result.streetViewRoofPitchStatus || "not_attempted";
     const lat = result.addressData?.lat || 0;
     const lon = result.addressData?.lon || 0;
 
@@ -272,39 +269,19 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       if (totalImages > 0) {
         pitchMessage = "Roof pitch is a default estimate because the uploaded image could not be processed for analysis.";
       }
-      if (roofInfo.pitchSource === "street_view_failed") {
-        pitchMessage += ` Street View imagery was ${streetViewRoofPitchStatus === "unavailable" ? "not available" : "attempted but failed"} for roof pitch estimation.`;
-      } else if (roofInfo.pitchSource === "satellite_failed") {
-        pitchMessage += " Satellite imagery analysis failed to detect the roof.";
-      }
       pitchMessage += " Please upload a clear photo showing the roof for a more accurate assessment.";
       resultsHtml += `
         <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">${pitchMessage}</p>
       `;
     } else {
       resultsHtml += `
-        <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Roof pitch estimated from ${roofInfo.pitchSource === "user_image" ? "your uploaded photo" : roofInfo.pitchSource === "street_view" ? "Street View imagery" : "satellite imagery"}.</p>
+        <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Roof pitch estimated from ${roofInfo.pitchSource === "user_image" ? "your uploaded photo" : "default"}.</p>
       `;
-    }
-
-    if (usedStreetView) {
-      if (streetViewStatus === "success") {
-        resultsHtml += `
-          <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Used Google Street View images for window and door detection due to no user-uploaded photos.</p>
-        `;
-      } else {
-        let reason = streetViewStatus === "unavailable" ? "Street View imagery is not available for this location." :
-                     streetViewStatus === "api_key_missing" ? "Google Maps API key is missing." :
-                     "Failed to fetch Street View imagery.";
-        resultsHtml += `
-          <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">${reason} Default window/door counts were used. Please upload photos for better accuracy.</p>
-        `;
-      }
     }
 
     if (!isWindowDoorCountReliable && !windowCount && !doorCount) {
       resultsHtml += `
-        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Window and door counts are estimates based on manual input or Street View. For better accuracy, provide counts or upload clear photos.</p>
+        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Window and door counts are estimates. For better accuracy, provide counts or upload clear photos.</p>
       `;
     }
 
@@ -314,7 +291,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Cost Estimate (Approximate)</h3>
     `;
 
-    if (isCostReliable) {
+    if (isCostReliable && costEstimates.totalCostLow !== 0 && costEstimates.totalCostHigh !== 0) {
       resultsHtml += `
         <p style="margin: 0.5rem 0;"><strong>Total:</strong> $${costEstimates.totalCostLow.toLocaleString()}–$${costEstimates.totalCostHigh.toLocaleString()}</p>
         <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${costEstimates.costBreakdown.map(item => `<li>${item}</li>`).join("")}</ul>
@@ -327,7 +304,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       }
     } else {
       resultsHtml += `
-        <p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable because both building dimensions and window/door counts are unreliable. Please provide manual counts and sizes or upload clear photos of the house exterior.</p>
+        <p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable. Please provide manual counts and sizes or upload clear photos of the house exterior.</p>
       `;
     }
 
@@ -371,17 +348,6 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
           <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Processed ${Object.values(processedImages).length} user-uploaded image(s) for window and door detection. Up to 1 image per direction is processed.</p>
         `;
       }
-    }
-
-    if (satelliteImage) {
-      resultsHtml += `
-        <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Satellite View (Google Maps)</h3>
-        <div style="text-align: center;">
-          <img src="${satelliteImage}" alt="Satellite View of House" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin: 1rem 0;">
-        </div>
-      `;
-    } else if (satelliteImageError) {
-      resultsHtml += `<p style="color: #d32f2f; text-align: center; margin: 1rem 0;">${satelliteImageError}</p>`;
     }
 
     if (lat && lon) {
@@ -468,10 +434,25 @@ directions.forEach(direction => {
 
   document.getElementById(`capture${direction.charAt(0).toUpperCase() + direction.slice(1)}`).addEventListener("click", async () => {
     try {
-      // Request back-facing camera
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "environment" } // Prefer back camera
-      });
+      // Try to access the back-facing camera first
+      let stream;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: { ideal: "environment" } // Prefer back camera
+          }
+        });
+      } catch (err) {
+        console.warn("Back camera not available, falling back to default camera:", err);
+        // Fallback to default camera if back camera fails
+        stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
+      // Debug available devices
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(device => device.kind === "videoinput");
+      console.log("Available video devices:", videoDevices);
+
       const video = document.createElement("video");
       video.srcObject = stream;
       video.play();
@@ -558,7 +539,7 @@ directions.forEach(direction => {
       });
     } catch (error) {
       console.error(`Error accessing camera for ${direction}:`, error);
-      displayError(`Failed to access back camera: ${error.message}. Please try uploading an image instead or allow camera permissions.`);
+      displayError(`Failed to access camera: ${error.message}. Please ensure camera permissions are granted and try using the back camera, or upload an image instead.`);
     }
   });
 });
@@ -603,7 +584,7 @@ function displayError(message) {
   document.getElementById("results").innerHTML = `
     <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem; text-align: center;" role="alert">
       <p style="color: #d32f2f; margin: 0.5rem 0;">${message}</p>
-      <p style="margin: 0.5rem 0;">Please try again or contact Indy Home Improvements at <a href="tel:7653663344" style="color: #e67e22; text-decoration: none;">765–366–3344</a> for assistance.</p>
+      <p style="margin: 0.5rem 0;">Please try again or contact Indy Home Improvements at <a href="tel:7653663344" style="color: #e67e22; text-decoration: none;">765-366-3344</a> for assistance.</p>
     </div>
   `;
 }
@@ -613,7 +594,7 @@ function displayWarning(message) {
   const resultsDiv = document.getElementById("results");
   if (resultsDiv.innerHTML === "") {
     resultsDiv.innerHTML = `
-      <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); padding: 2rem; text-align: center;" role="alert">
+      <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem; text-align: center;" role="alert">
         <p style="color: #e67e22; margin: 0.5rem 0;">${message}</p>
       </div>
     `;
