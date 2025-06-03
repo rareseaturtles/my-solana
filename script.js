@@ -291,7 +291,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
       `;
     }
 
-    const smsSummary = `Remodel at ${addressDisplay}: ${measurements.area}sqft, ${components.includes("windows") ? windowDoorCount.windows + " windows" : ""}${components.includes("windows") && components.includes("doors") ? ", " : ""}${components.includes("doors") ? windowDoorCount.doors + " doors" : ""}, ~$${costEstimates.totalCostLow.toLocaleString()}–$${costEstimates.totalCostHigh.toLocaleString()}. Contact Indy Home Improvements for a detailed quote.`;
+    const smsSummary = `Requesting a quote for remodel at ${addressDisplay.split(", ").slice(0, 2).join(", ")}: ${measurements.area}sqft, ${components.map(comp => comp.charAt(0).toUpperCase() + comp.slice(1) + (comp === "windows" ? ` (${windowDoorCount.windows})` : comp === "doors" ? ` (${windowDoorCount.doors})` : "")).join(", ")}, ~$${costEstimates.totalCostLow.toLocaleString()}–$${costEstimates.totalCostHigh.toLocaleString()}.`;
     resultsHtml += `
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Next Steps with Indy Home Improvements</h3>
       <p style="margin: 0.5rem 0;">Ready to discuss your project? Contact us directly to request more info or a detailed quote.</p>
