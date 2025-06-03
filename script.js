@@ -437,38 +437,44 @@ directions.forEach(direction => {
   }
 
   document.getElementById(`capture${direction.charAt(0).toUpperCase() + direction.slice(1)}`).addEventListener("click", async () => {
+    let stream = null;
     try {
-      // Enumerate devices to find the back-facing camera
+      // Step 1: Enumerate devices to find the back-facing camera
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === "videoinput");
       console.log(`Frontend - Available video devices for ${direction}:`, videoDevices);
 
       let backCameraDeviceId = null;
       for (const device of videoDevices) {
-        // Look for labels indicating a back camera; fallback to regex if needed
-        if (device.label.toLowerCase().includes("back") || device.label.toLowerCase().includes("rear")) {
+        // Look for labels indicating a back camera
+        if (device.label.toLowerCase().includes("back") || device.label.toLowerCase().includes("rear") || device.label.toLowerCase().includes("environment")) {
           backCameraDeviceId = device.deviceId;
           break;
         }
       }
 
-      let stream;
+      // Step 2: Request the video stream, preferring the back camera
       if (backCameraDeviceId) {
         console.log(`Frontend - Using back camera (deviceId: ${backCameraDeviceId}) for ${direction}`);
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: backCameraDeviceId } }
+          video: { deviceId: { exact: backCameraDeviceId } },
+          audio: false
         });
       } else {
-        console.warn(`Frontend - Back camera not found for ${direction}, falling back to default camera`);
+        console.warn(`Frontend - Back camera not found for ${direction}, attempting to use facingMode: "environment"`);
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "environment" }
+          video: { facingMode: "environment" },
+          audio: false
         });
       }
 
+      // Step 3: Set up the video element
       const video = document.createElement("video");
       video.srcObject = stream;
-      video.play();
+      video.setAttribute("autoplay", "");
+      video.setAttribute("playsinline", ""); // Ensure it works on iOS
 
+      // Step 4: Create a modal for capturing the photo
       const modal = document.createElement("div");
       modal.style.position = "fixed";
       modal.style.top = "0";
@@ -517,6 +523,15 @@ directions.forEach(direction => {
       modal.appendChild(container);
       document.body.appendChild(modal);
 
+      // Wait for video to be ready
+      await new Promise(resolve => {
+        video.onloadedmetadata = () => {
+          video.play();
+          resolve();
+        };
+      });
+
+      // Step 5: Capture the photo
       captureButton.addEventListener("click", () => {
         const canvas = document.createElement("canvas");
         canvas.width = video.videoWidth;
@@ -541,6 +556,7 @@ directions.forEach(direction => {
         img.alt = `${direction} captured image`;
         preview.appendChild(img);
 
+        // Stop the stream and remove the modal
         stream.getTracks().forEach(track => track.stop());
         modal.remove();
       });
@@ -549,14 +565,23 @@ directions.forEach(direction => {
         stream.getTracks().forEach(track => track.stop());
         modal.remove();
       });
+
     } catch (error) {
       console.error(`Frontend - Error accessing camera for ${direction}:`, error);
-      displayError(`Failed to access camera: ${error.message}. Please ensure camera permissions are granted and try using the back camera, or upload an image instead.`);
+      let errorMessage = "Failed to access camera: " + error.message;
+      if (error.name === "OverconstrainedError") {
+        errorMessage += " The back camera may not be available. Please ensure permissions are granted or try uploading an image instead.";
+      } else if (error.name === "NotAllowedError") {
+        errorMessage += " Camera access was denied. Please allow camera permissions in your browser settings.";
+      }
+      displayError(errorMessage);
     }
   });
 });
 
-// Utility functions
+// ... (Rest of the script.js remains unchanged, including the cost estimate fix from the previous response)
+
+// Utility functions (ensure these are included)
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     if (!file || !file.type.startsWith("image/")) {
