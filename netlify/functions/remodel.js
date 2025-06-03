@@ -82,7 +82,7 @@ exports.handler = async (event) => {
     const lon = parseFloat(addressData[0].lon);
 
     // Get building data using Google Vision API for dimensions if photos are provided
-    const buildingData = await getBuildingDataFromUserImages(photos, lat, lon);
+    const buildingData = await getBuildingDataFromUserImages(photos, lat, lon, addressData);
     const measurements = buildingData.measurements;
     const roofInfo = buildingData.roofInfo;
     const isMeasurementsReliable = buildingData.isReliable;
@@ -108,8 +108,8 @@ exports.handler = async (event) => {
     if (totalImages === 0) {
       const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
       if (GOOGLE_MAPS_API_KEY) {
-        // Fetch a satellite image using Google Maps Static API
-        satelliteViewImage = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=18&size=600x400&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
+        // Fetch a higher-resolution satellite image for potential analysis
+        satelliteViewImage = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=19&size=800x600&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
         console.log(`Backend - Fetched satellite view image for ${lat},${lon}`);
       } else {
         console.warn("Backend - GOOGLE_MAPS_API_KEY not set, skipping satellite view image fetch.");
@@ -137,7 +137,7 @@ exports.handler = async (event) => {
       roofInfo,
       processedImages,
       allUploadedImages,
-      satelliteViewImage, // Updated to satellite view
+      satelliteViewImage,
       lat,
       lon,
     };
@@ -156,7 +156,7 @@ exports.handler = async (event) => {
       roofInfo,
       processedImages,
       allUploadedImages,
-      satelliteViewImage, // Updated to satellite view
+      satelliteViewImage,
       lat,
       lon,
     };
@@ -199,37 +199,51 @@ function getLocationMultiplier(addressData) {
   return { multiplierLow, multiplierHigh };
 }
 
-async function getBuildingDataFromUserImages(photos, lat, lon) {
+// Helper function to estimate average home size based on location
+function getAverageHomeSize(addressData) {
+  const address = addressData[0]?.display_name?.toLowerCase() || "";
+  let averageArea = 1500; // Default average home size in the U.S. (2025 estimate)
+
+  // Adjust based on regional averages (approximations for 2025)
+  if (address.includes("california") || address.includes("new york")) {
+    averageArea = 1800; // Higher due to urban density and larger homes in some areas
+  } else if (address.includes("indiana") || address.includes("ohio")) {
+    averageArea = 1400; // Slightly below national average
+  } else if (address.includes("texas") || address.includes("florida")) {
+    averageArea = 1600; // Larger homes common in suburban areas
+  }
+
+  console.log(`Backend - Estimated average home size for ${address}: ${averageArea} sqft`);
+  return averageArea;
+}
+
+async function getBuildingDataFromUserImages(photos, lat, lon, addressData) {
   const directions = ["north", "south", "east", "west"];
-  let width = 40, length = 32, area = 1280, isReliable = false;
-  let pitch = "6/12", height = 16, roofArea = 1431, roofMaterial = "Asphalt Shingles";
+  let width, length, area, isReliable = false;
+  let pitch = "6/12", height = 16, roofArea, roofMaterial = "Asphalt Shingles";
 
   const totalImages = directions
     .flatMap(direction => photos[direction] || [])
     .filter(image => image && typeof image === "string" && image.startsWith("data:image/")).length;
 
   if (totalImages === 0) {
-    // Instead of defaulting to 1280 sqft, attempt to fetch property data or use satellite imagery
-    // Option 1: Use a property data API (e.g., Zillow, Redfin) to get square footage
-    // Note: Zillow Property API or Redfin API could be used here to fetch property details, including square footage.
-    // Requires an API key and may incur costs. Example endpoint: https://api.zillow.com/v2/property (requires authentication).
-    // For now, we'll proceed with a satellite-based estimate placeholder.
-
-    // Option 2: Use Google Maps/Earth API to estimate area from satellite imagery
-    // Note: Automated roof measurement requires advanced AI (e.g., Sky Roof Measure, GAF QuickMeasure).
-    // For simplicity, we'll use a placeholder estimate and recommend a third-party service.
+    // No user photos provided, attempt to estimate using regional averages and satellite imagery
     const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
     if (GOOGLE_MAPS_API_KEY) {
       console.log(`Backend - Attempting to estimate area using satellite imagery for ${lat},${lon}`);
-      // Placeholder: In a real implementation, you'd use a service like Sky Roof Measure or integrate with Google Earth Engine
-      // to process satellite imagery and estimate the roof footprint. For now, we'll adjust the default slightly.
-      area = 1500; // Placeholder adjustment (replace with actual satellite-based estimate)
+      // Note: Automated roof measurement from satellite imagery requires advanced AI.
+      // Consider integrating with a third-party service like Sky Roof Measure or GAF QuickMeasure
+      // for accurate roof measurements. For now, we'll use a regional average as a placeholder.
+      area = getAverageHomeSize(addressData);
       width = Math.round(Math.sqrt(area) * 1.25);
       length = Math.round(area / width);
-      isReliable = false; // Mark as unreliable until a proper satellite-based solution is implemented
-      console.log(`Backend - Placeholder satellite estimate: ${area} sqft (recommended to use a service like Sky Roof Measure)`);
+      isReliable = false; // Mark as unreliable until a proper solution is implemented
+      console.log(`Backend - Using regional average estimate: ${area} sqft (recommended to use a service like Sky Roof Measure for accuracy)`);
     } else {
       console.warn("Backend - GOOGLE_MAPS_API_KEY not set, using default area estimate.");
+      area = 1500; // Fallback default
+      width = Math.round(Math.sqrt(area) * 1.25);
+      length = Math.round(area / width);
     }
 
     const pitchFactor = { "4/12": 1.054, "6/12": 1.118, "8/12": 1.202 }[pitch] || 1.118;
@@ -325,9 +339,9 @@ async function getBuildingDataFromUserImages(photos, lat, lon) {
             isReliable = true;
 
             if (area < 500 || area > 5000) {
-              width = 40;
-              length = 32;
-              area = 1280;
+              area = getAverageHomeSize(addressData);
+              width = Math.round(Math.sqrt(area) * 1.25);
+              length = Math.round(area / width);
               isReliable = false;
             }
             break;
@@ -338,6 +352,14 @@ async function getBuildingDataFromUserImages(photos, lat, lon) {
       }
       if (isReliable) break;
     }
+  }
+
+  if (!area) {
+    // Fallback if Vision API fails
+    area = getAverageHomeSize(addressData);
+    width = Math.round(Math.sqrt(area) * 1.25);
+    length = Math.round(area / width);
+    isReliable = false;
   }
 
   const pitchFactor = { "4/12": 1.054, "6/12": 1.118, "8/12": 1.202 }[pitch] || 1.118;
