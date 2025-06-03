@@ -106,19 +106,19 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   }
 
   // Log photo inputs
-  console.log("Raw photo inputs:", {
+  console.log("Frontend - Raw photo inputs:", {
     north: photos.north.map(file => file.name),
     south: photos.south.map(file => file.name),
     east: photos.east.map(file => file.name),
     west: photos.west.map(file => file.name),
   });
-  console.log("Retry photo inputs:", {
+  console.log("Frontend - Retry photo inputs:", {
     north: retryPhotos.north.map(file => file.name),
     south: retryPhotos.south.map(file => file.name),
     east: retryPhotos.east.map(file => file.name),
     west: retryPhotos.west.map(file => file.name),
   });
-  console.log(`Total images selected: ${totalImages}`);
+  console.log(`Frontend - Total images selected: ${totalImages}`);
 
   // Warn about multiple images per direction
   const directions = ["north", "south", "east", "west"];
@@ -146,7 +146,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
           const base64 = await fileToBase64(file);
           results.push(base64);
         } catch (error) {
-          console.error(`Error converting ${direction} photo: ${error.message}`);
+          console.error(`Frontend - Error converting ${direction} photo: ${error.message}`);
           throw new Error(`${direction.charAt(0).toUpperCase() + direction.slice(1)} photo: ${error.message}`);
         }
       }
@@ -167,10 +167,10 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       west: await Promise.race([convertDirection(retryPhotos.west, "westRetry"), timeoutPromise]),
     };
 
-    console.log("Converted photos to base64:", Object.keys(resolvedPhotos).map(dir => `${dir}: ${resolvedPhotos[dir].length}`).join(", "));
-    console.log("Converted retry photos to base64:", Object.keys(resolvedRetryPhotos).map(dir => `${dir}: ${resolvedRetryPhotos[dir].length}`).join(", "));
+    console.log("Frontend - Converted photos to base64:", Object.keys(resolvedPhotos).map(dir => `${dir}: ${resolvedPhotos[dir].length}`).join(", "));
+    console.log("Frontend - Converted retry photos to base64:", Object.keys(resolvedRetryPhotos).map(dir => `${dir}: ${resolvedRetryPhotos[dir].length}`).join(", "));
   } catch (error) {
-    console.error("Error converting images to base64:", error.message);
+    console.error("Frontend - Error converting images to base64:", error.message);
     displayError(`Failed to process uploaded images: ${error.message}. Please ensure they are valid image files (JPEG, PNG) and try again.`);
     submitButton.disabled = false;
     submitButton.innerHTML = "Get Estimate";
@@ -188,7 +188,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       </style>
     `;
 
-    console.log("Sending request to /.netlify/functions/remodel with data:", { address, photos: resolvedPhotos, retryPhotos: resolvedRetryPhotos, windowCount, doorCount, windowSizes, doorSizes });
+    console.log("Frontend - Sending request to /.netlify/functions/remodel with data:", { address, photos: resolvedPhotos, retryPhotos: resolvedRetryPhotos, windowCount, doorCount, windowSizes, doorSizes });
     const response = await fetch("/.netlify/functions/remodel", {
       method: "POST",
       body: JSON.stringify({
@@ -201,7 +201,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
         doorSizes,
       }),
     });
-    console.log("Response status:", response.status);
+    console.log("Frontend - Response status:", response.status);
 
     if (!response.ok) {
       const text = await response.text();
@@ -216,7 +216,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       throw new Error(`Failed to parse response as JSON: ${text}`);
     }
 
-    console.log("Server response:", result); // Debug log
+    console.log("Frontend - Server Response:", result);
 
     if (result.error) throw new Error(result.error);
 
@@ -291,7 +291,10 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Cost Estimate (Approximate)</h3>
     `;
 
-    if (isCostReliable && costEstimates.totalCostLow !== 0 && costEstimates.totalCostHigh !== 0) {
+    // Ensure cost estimates are valid numbers and greater than 0
+    const hasValidCost = costEstimates && typeof costEstimates.totalCostLow === "number" && typeof costEstimates.totalCostHigh === "number" && costEstimates.totalCostLow > 0 && costEstimates.totalCostHigh > 0;
+
+    if (isCostReliable && hasValidCost) {
       resultsHtml += `
         <p style="margin: 0.5rem 0;"><strong>Total:</strong> $${costEstimates.totalCostLow.toLocaleString()}–$${costEstimates.totalCostHigh.toLocaleString()}</p>
         <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${costEstimates.costBreakdown.map(item => `<li>${item}</li>`).join("")}</ul>
@@ -306,6 +309,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       resultsHtml += `
         <p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable. Please provide manual counts and sizes or upload clear photos of the house exterior.</p>
       `;
+      console.log("Frontend - Cost estimate display fallback triggered. isCostReliable:", isCostReliable, "hasValidCost:", hasValidCost);
     }
 
     resultsHtml += `
@@ -376,7 +380,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
 
     document.getElementById("results").innerHTML = resultsHtml;
   } catch (error) {
-    console.error("Fetch error:", error);
+    console.error("Frontend - Fetch Error:", error);
     displayError(`Error: ${error.message}. Please try again or contact support.`);
   } finally {
     submitButton.disabled = false;
@@ -391,7 +395,7 @@ directions.forEach(direction => {
     const preview = document.getElementById(`${direction}Preview`);
     preview.innerHTML = "";
     const files = Array.from(e.target.files);
-    console.log(`Selected ${files.length} files for ${direction} direction:`, files.map(file => file.name));
+    console.log(`Frontend - Selected ${files.length} files for ${direction} direction:`, files.map(file => file.name));
     files.forEach(file => {
       if (!file.type.startsWith("image/")) {
         displayError(`Invalid file type for ${direction} photo. Please upload images (JPEG, PNG).`);
@@ -414,7 +418,7 @@ directions.forEach(direction => {
       const preview = document.getElementById(`${direction}RetryPreview`);
       preview.innerHTML = "";
       const files = Array.from(e.target.files);
-      console.log(`Selected ${files.length} retry files for ${direction} direction:`, files.map(file => file.name));
+      console.log(`Frontend - Selected ${files.length} retry files for ${direction} direction:`, files.map(file => file.name));
       files.forEach(file => {
         if (!file.type.startsWith("image/")) {
           displayError(`Invalid file type for ${direction} retry photo. Please upload images (JPEG, PNG).`);
@@ -434,24 +438,32 @@ directions.forEach(direction => {
 
   document.getElementById(`capture${direction.charAt(0).toUpperCase() + direction.slice(1)}`).addEventListener("click", async () => {
     try {
-      // Try to access the back-facing camera first
-      let stream;
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: { ideal: "environment" } // Prefer back camera
-          }
-        });
-      } catch (err) {
-        console.warn("Back camera not available, falling back to default camera:", err);
-        // Fallback to default camera if back camera fails
-        stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      }
-
-      // Debug available devices
+      // Enumerate devices to find the back-facing camera
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === "videoinput");
-      console.log("Available video devices:", videoDevices);
+      console.log(`Frontend - Available video devices for ${direction}:`, videoDevices);
+
+      let backCameraDeviceId = null;
+      for (const device of videoDevices) {
+        // Look for labels indicating a back camera; fallback to regex if needed
+        if (device.label.toLowerCase().includes("back") || device.label.toLowerCase().includes("rear")) {
+          backCameraDeviceId = device.deviceId;
+          break;
+        }
+      }
+
+      let stream;
+      if (backCameraDeviceId) {
+        console.log(`Frontend - Using back camera (deviceId: ${backCameraDeviceId}) for ${direction}`);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: backCameraDeviceId } }
+        });
+      } else {
+        console.warn(`Frontend - Back camera not found for ${direction}, falling back to default camera`);
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "environment" }
+        });
+      }
 
       const video = document.createElement("video");
       video.srcObject = stream;
@@ -538,7 +550,7 @@ directions.forEach(direction => {
         modal.remove();
       });
     } catch (error) {
-      console.error(`Error accessing camera for ${direction}:`, error);
+      console.error(`Frontend - Error accessing camera for ${direction}:`, error);
       displayError(`Failed to access camera: ${error.message}. Please ensure camera permissions are granted and try using the back camera, or upload an image instead.`);
     }
   });
@@ -553,7 +565,7 @@ function fileToBase64(file) {
     }
     const reader = new FileReader();
     reader.onload = () => {
-      console.log(`Converted file ${file.name} to base64, length: ${reader.result.length}`);
+      console.log(`Frontend - Converted file ${file.name} to base64, length: ${reader.result.length}`);
       if (!reader.result || typeof reader.result !== "string") {
         reject(new Error(`Failed to convert ${file.name} to base64.`));
         return;
@@ -561,7 +573,7 @@ function fileToBase64(file) {
       resolve(reader.result);
     };
     reader.onerror = () => {
-      console.error(`Error reading file ${file.name}`);
+      console.error(`Frontend - Error reading file ${file.name}`);
       reject(new Error(`Failed to read file ${file.name}.`));
     };
     reader.readAsDataURL(file);
@@ -590,7 +602,7 @@ function displayError(message) {
 }
 
 function displayWarning(message) {
-  console.log("Warning:", message);
+  console.log("Frontend - Warning:", message);
   const resultsDiv = document.getElementById("results");
   if (resultsDiv.innerHTML === "") {
     resultsDiv.innerHTML = `
