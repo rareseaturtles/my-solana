@@ -1,185 +1,188 @@
-// Dynamic input generation for windows
-document.getElementById("windowCount").addEventListener("input", (e) => {
-  const count = parseInt(e.target.value) || 0;
-  const windowSizesDiv = document.getElementById("windowSizes");
-  windowSizesDiv.innerHTML = "";
-  for (let i = 0; i < count; i++) {
-    windowSizesDiv.innerHTML += `
-      <div style="margin-bottom: 10px;">
-        <label>Window ${i + 1} Size (Width x Height in feet):</label>
-        <input type="number" step="0.1" min="0" id="windowWidth${i}" placeholder="Width (e.g., 3)" style="width: 80px;" required>
-        <span> x </span>
-        <input type="number" step="0.1" min="0" id="windowHeight${i}" placeholder="Height (e.g., 4)" style="width: 80px;" required>
+// Constants
+const DIRECTIONS = ["north", "south", "east", "west"];
+const IMAGE_SIZE_LIMIT = 500 * 1024; // 500KB
+const IMAGE_PROCESSING_TIMEOUT = 10000; // 10 seconds
+
+// Utility Functions
+function $(id) {
+  return document.getElementById(id);
+}
+
+function createElement(type, styles, attributes = {}) {
+  const element = document.createElement(type);
+  Object.assign(element.style, styles);
+  Object.entries(attributes).forEach(([key, value]) => element.setAttribute(key, value));
+  return element;
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || !file.type.startsWith("image/")) {
+      return reject(new Error("Invalid file type. Please upload images (JPEG, PNG)."));
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      console.log(`Frontend - Converted file ${file.name} to base64, length: ${reader.result.length}`);
+      if (!reader.result || typeof reader.result !== "string") {
+        return reject(new Error(`Failed to convert ${file.name} to base64.`));
+      }
+      resolve(reader.result);
+    };
+    reader.onerror = () => {
+      console.error(`Frontend - Error reading file ${file.name}`);
+      reject(new Error(`Failed to read file ${file.name}.`));
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function dataURLtoFile(dataUrl, filename) {
+  const arr = dataUrl.split(",");
+  const mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]);
+  let n = bstr.length;
+  const u8arr = new Uint8Array(n);
+  while (n--) u8arr[n] = bstr.charCodeAt(n);
+  return new File([u8arr], filename, { type: mime });
+}
+
+function displayError(message) {
+  $("results").innerHTML = `
+    <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem; text-align: center;" role="alert">
+      <p style="color: #d32f2f; margin: 0.5rem 0;">${message}</p>
+      <p style="margin: 0.5rem 0;">Please try again or contact Indy Home Improvements at <a href="tel:7653663344" style="color: #e67e22; text-decoration: none;">765-366-3344</a> for assistance.</p>
+    </div>
+  `;
+}
+
+function displayWarning(message) {
+  console.log("Frontend - Warning:", message);
+  const resultsDiv = $("results");
+  if (resultsDiv.innerHTML === "") {
+    resultsDiv.innerHTML = `
+      <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem; text-align: center;" role="alert">
+        <p style="color: #e67e22; margin: 0.5rem 0;">${message}</p>
       </div>
     `;
   }
-});
+}
 
-// Dynamic input generation for doors
-document.getElementById("doorCount").addEventListener("input", (e) => {
-  const count = parseInt(e.target.value) || 0;
-  const doorSizesDiv = document.getElementById("doorSizes");
-  doorSizesDiv.innerHTML = "";
+function generateDynamicInputs(type, count, containerId) {
+  const container = $(containerId);
+  container.innerHTML = "";
   for (let i = 0; i < count; i++) {
-    doorSizesDiv.innerHTML += `
-      <div style="margin-bottom: 10px;">
-        <label>Door ${i + 1} Size (Width x Height in feet):</label>
-        <input type="number" step="0.1" min="0" id="doorWidth${i}" placeholder="Width (e.g., 3)" style="width: 80px;" required>
-        <span> x </span>
-        <input type="number" step="0.1" min="0" id="doorHeight${i}" placeholder="Height (e.g., 7)" style="width: 80px;" required>
-      </div>
+    const div = createElement("div", { marginBottom: "10px" });
+    div.innerHTML = `
+      <label>${type} ${i + 1} Size (Width x Height in feet):</label>
+      <input type="number" step="0.1" min="0" id="${type.toLowerCase()}Width${i}" placeholder="Width (e.g., 3)" style="width: 80px;" required>
+      <span> x </span>
+      <input type="number" step="0.1" min="0" id="${type.toLowerCase()}Height${i}" placeholder="Height (e.g., ${type === "Window" ? 4 : 7})" style="width: 80px;" required>
     `;
+    container.appendChild(div);
   }
-});
+}
 
-// Form submission handler
-document.getElementById("remodelForm").addEventListener("submit", async (e) => {
+async function convertPhotosToBase64(photoFiles, direction) {
+  const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Image processing timed out. Please try uploading smaller images.")), IMAGE_PROCESSING_TIMEOUT));
+  const results = [];
+  for (const file of photoFiles) {
+    if (file.size > IMAGE_SIZE_LIMIT) {
+      throw new Error(`Image ${file.name} exceeds 500KB. Please upload a smaller image.`);
+    }
+    const base64 = await Promise.race([fileToBase64(file), timeoutPromise]);
+    results.push(base64);
+  }
+  return results;
+}
+
+// Dynamic Input Generation
+$("windowCount").addEventListener("input", (e) => generateDynamicInputs("Window", parseInt(e.target.value) || 0, "windowSizes"));
+$("doorCount").addEventListener("input", (e) => generateDynamicInputs("Door", parseInt(e.target.value) || 0, "doorSizes"));
+
+// Form Submission Handler
+$("remodelForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const submitButton = e.target.querySelector("button[type='submit']");
   submitButton.disabled = true;
   submitButton.innerHTML = "Processing...";
 
-  const address = document.getElementById("address").value.trim();
-  const photos = {
-    north: Array.from(document.getElementById("northPhotos").files),
-    south: Array.from(document.getElementById("southPhotos").files),
-    east: Array.from(document.getElementById("eastPhotos").files),
-    west: Array.from(document.getElementById("westPhotos").files),
-  };
-  const retryPhotos = {
-    north: Array.from(document.getElementById("northRetryPhotos")?.files || []),
-    south: Array.from(document.getElementById("southRetryPhotos")?.files || []),
-    east: Array.from(document.getElementById("eastRetryPhotos")?.files || []),
-    west: Array.from(document.getElementById("westRetryPhotos")?.files || []),
-  };
-  const windowCount = parseInt(document.getElementById("windowCount").value) || null;
-  const doorCount = parseInt(document.getElementById("doorCount").value) || null;
-
-  // Validate window sizes
-  const windowSizes = [];
-  if (windowCount) {
-    for (let i = 0; i < windowCount; i++) {
-      const width = parseFloat(document.getElementById(`windowWidth${i}`).value);
-      const height = parseFloat(document.getElementById(`windowHeight${i}`).value);
-      if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
-        displayError(`Please provide valid dimensions for Window ${i + 1} (positive numbers).`);
-        submitButton.disabled = false;
-        submitButton.innerHTML = "Get Estimate";
-        return;
-      }
-      windowSizes.push(`${width}ft x ${height}ft`);
-    }
-  }
-
-  // Validate door sizes
-  const doorSizes = [];
-  if (doorCount) {
-    for (let i = 0; i < doorCount; i++) {
-      const width = parseFloat(document.getElementById(`doorWidth${i}`).value);
-      const height = parseFloat(document.getElementById(`doorHeight${i}`).value);
-      if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
-        displayError(`Please provide valid dimensions for Door ${i + 1} (positive numbers).`);
-        submitButton.disabled = false;
-        submitButton.innerHTML = "Get Estimate";
-        return;
-      }
-      doorSizes.push(`${width}ft x ${height}ft`);
-    }
-  }
-
-  // Validate address
-  if (!address) {
-    displayError("Please enter a valid address.");
-    submitButton.disabled = false;
-    submitButton.innerHTML = "Get Estimate";
-    return;
-  }
-
-  // Validate at least one photo or manual counts
-  const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0) +
-                      Object.values(retryPhotos).reduce((sum, arr) => sum + arr.length, 0);
-  if (totalImages === 0 && windowCount === null && doorCount === null) {
-    displayError("Please upload at least one photo for each direction or provide window and door counts.");
-    submitButton.disabled = false;
-    submitButton.innerHTML = "Get Estimate";
-    return;
-  }
-
-  // Log photo inputs
-  console.log("Frontend - Raw photo inputs:", {
-    north: photos.north.map(file => file.name),
-    south: photos.south.map(file => file.name),
-    east: photos.east.map(file => file.name),
-    west: photos.west.map(file => file.name),
-  });
-  console.log("Frontend - Retry photo inputs:", {
-    north: retryPhotos.north.map(file => file.name),
-    south: retryPhotos.south.map(file => file.name),
-    east: retryPhotos.east.map(file => file.name),
-    west: retryPhotos.west.map(file => file.name),
-  });
-  console.log(`Frontend - Total images selected: ${totalImages}`);
-
-  // Warn about multiple images per direction
-  const directions = ["north", "south", "east", "west"];
-  for (const direction of directions) {
-    if (photos[direction].length > 1) {
-      displayWarning(`Multiple images uploaded for ${direction}. Only the first image will be processed for analysis, but all images will be saved.`);
-    }
-    document.getElementById(`${direction}Retry`).style.display = "none";
-  }
-
-  // Convert photos to base64
-  let resolvedPhotos, resolvedRetryPhotos;
   try {
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error("Image processing timed out. Please try uploading smaller images.")), 10000);
+    const address = $("address").value.trim();
+    const photos = {
+      north: Array.from($("northPhotos").files),
+      south: Array.from($("southPhotos").files),
+      east: Array.from($("eastPhotos").files),
+      west: Array.from($("westPhotos").files),
+    };
+    const retryPhotos = {
+      north: Array.from($("northRetryPhotos")?.files || []),
+      south: Array.from($("southRetryPhotos")?.files || []),
+      east: Array.from($("eastRetryPhotos")?.files || []),
+      west: Array.from($("westRetryPhotos")?.files || []),
+    };
+    const windowCount = parseInt($("windowCount").value) || null;
+    const doorCount = parseInt($("doorCount").value) || null;
+
+    // Validate Inputs
+    if (!address) {
+      throw new Error("Please enter a valid address.");
+    }
+
+    const windowSizes = [];
+    if (windowCount) {
+      for (let i = 0; i < windowCount; i++) {
+        const width = parseFloat($(`windowWidth${i}`).value);
+        const height = parseFloat($(`windowHeight${i}`).value);
+        if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
+          throw new Error(`Please provide valid dimensions for Window ${i + 1} (positive numbers).`);
+        }
+        windowSizes.push(`${width}ft x ${height}ft`);
+      }
+    }
+
+    const doorSizes = [];
+    if (doorCount) {
+      for (let i = 0; i < doorCount; i++) {
+        const width = parseFloat($(`doorWidth${i}`).value);
+        const height = parseFloat($(`doorHeight${i}`).value);
+        if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
+          throw new Error(`Please provide valid dimensions for Door ${i + 1} (positive numbers).`);
+        }
+        doorSizes.push(`${width}ft x ${height}ft`);
+      }
+    }
+
+    const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0) +
+                        Object.values(retryPhotos).reduce((sum, arr) => sum + arr.length, 0);
+    if (totalImages === 0 && windowCount === null && doorCount === null) {
+      throw new Error("Please upload at least one photo for each direction or provide window and door counts.");
+    }
+
+    // Log Photo Inputs
+    console.log("Frontend - Raw photo inputs:", Object.fromEntries(DIRECTIONS.map(dir => [dir, photos[dir].map(file => file.name)])));
+    console.log("Frontend - Retry photo inputs:", Object.fromEntries(DIRECTIONS.map(dir => [dir, retryPhotos[dir].map(file => file.name)])));
+    console.log(`Frontend - Total images selected: ${totalImages}`);
+
+    // Warn About Multiple Images
+    DIRECTIONS.forEach(direction => {
+      if (photos[direction].length > 1) {
+        displayWarning(`Multiple images uploaded for ${direction}. Only the first image will be processed for analysis, but all images will be saved.`);
+      }
+      $(`${direction}Retry`).style.display = "none";
     });
 
-    const convertDirection = async (directionFiles, direction) => {
-      const results = [];
-      for (const file of directionFiles) {
-        try {
-          if (file.size > 500 * 1024) {
-            throw new Error(`Image ${file.name} exceeds 500KB. Please upload a smaller image.`);
-          }
-          const base64 = await fileToBase64(file);
-          results.push(base64);
-        } catch (error) {
-          console.error(`Frontend - Error converting ${direction} photo: ${error.message}`);
-          throw new Error(`${direction.charAt(0).toUpperCase() + direction.slice(1)} photo: ${error.message}`);
-        }
-      }
-      return results;
-    };
+    // Convert Photos to Base64
+    const resolvedPhotos = {};
+    const resolvedRetryPhotos = {};
+    for (const direction of DIRECTIONS) {
+      resolvedPhotos[direction] = await convertPhotosToBase64(photos[direction], direction);
+      resolvedRetryPhotos[direction] = await convertPhotosToBase64(retryPhotos[direction], `${direction}Retry`);
+    }
+    console.log("Frontend - Converted photos to base64:", Object.fromEntries(DIRECTIONS.map(dir => [dir, resolvedPhotos[dir].length])));
+    console.log("Frontend - Converted retry photos to base64:", Object.fromEntries(DIRECTIONS.map(dir => [dir, resolvedRetryPhotos[dir].length])));
 
-    resolvedPhotos = {
-      north: await Promise.race([convertDirection(photos.north, "north"), timeoutPromise]),
-      south: await Promise.race([convertDirection(photos.south, "south"), timeoutPromise]),
-      east: await Promise.race([convertDirection(photos.east, "east"), timeoutPromise]),
-      west: await Promise.race([convertDirection(photos.west, "west"), timeoutPromise]),
-    };
-
-    resolvedRetryPhotos = {
-      north: await Promise.race([convertDirection(retryPhotos.north, "northRetry"), timeoutPromise]),
-      south: await Promise.race([convertDirection(retryPhotos.south, "southRetry"), timeoutPromise]),
-      east: await Promise.race([convertDirection(retryPhotos.east, "eastRetry"), timeoutPromise]),
-      west: await Promise.race([convertDirection(retryPhotos.west, "westRetry"), timeoutPromise]),
-    };
-
-    console.log("Frontend - Converted photos to base64:", Object.keys(resolvedPhotos).map(dir => `${dir}: ${resolvedPhotos[dir].length}`).join(", "));
-    console.log("Frontend - Converted retry photos to base64:", Object.keys(resolvedRetryPhotos).map(dir => `${dir}: ${resolvedRetryPhotos[dir].length}`).join(", "));
-  } catch (error) {
-    console.error("Frontend - Error converting images to base64:", error.message);
-    displayError(`Failed to process uploaded images: ${error.message}. Please ensure they are valid image files (JPEG, PNG) and try again.`);
-    submitButton.disabled = false;
-    submitButton.innerHTML = "Get Estimate";
-    return;
-  }
-
-  // Send request to Netlify function
-  try {
-    document.getElementById("results").innerHTML = `
+    // Send Request to Netlify Function
+    $("results").innerHTML = `
       <div style="text-align: center;">
         <p>Loading... <span class="spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #e67e22; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></p>
       </div>
@@ -191,15 +194,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     console.log("Frontend - Sending request to /.netlify/functions/remodel with data:", { address, photos: resolvedPhotos, retryPhotos: resolvedRetryPhotos, windowCount, doorCount, windowSizes, doorSizes });
     const response = await fetch("/.netlify/functions/remodel", {
       method: "POST",
-      body: JSON.stringify({
-        address,
-        photos: resolvedPhotos,
-        retryPhotos: resolvedRetryPhotos,
-        windowCount,
-        doorCount,
-        windowSizes,
-        doorSizes,
-      }),
+      body: JSON.stringify({ address, photos: resolvedPhotos, retryPhotos: resolvedRetryPhotos, windowCount, doorCount, windowSizes, doorSizes }),
     });
     console.log("Frontend - Response status:", response.status);
 
@@ -208,29 +203,17 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       throw new Error(`Server error: ${response.status} - ${text}`);
     }
 
-    let result;
-    try {
-      result = await response.json();
-    } catch (jsonError) {
-      const text = await response.text();
-      throw new Error(`Failed to parse response as JSON: ${text}`);
-    }
-
+    const result = await response.json();
     console.log("Frontend - Server Response:", result);
-
     if (result.error) throw new Error(result.error);
 
+    // Handle Retry Directions
     if (result.retryDirections && result.retryDirections.length > 0) {
-      result.retryDirections.forEach(direction => {
-        document.getElementById(`${direction}Retry`).style.display = "block";
-      });
-      displayError("Failed to detect windows or doors in some images. Please upload closer photos as requested and resubmit.");
-      submitButton.disabled = false;
-      submitButton.innerHTML = "Get Estimate";
-      return;
+      result.retryDirections.forEach(direction => $(`${direction}Retry`).style.display = "block");
+      throw new Error("Failed to detect windows or doors in some images. Please upload closer photos as requested and resubmit.");
     }
 
-    // Process and display results
+    // Process and Display Results
     const remodelId = result.remodelId || "unknown";
     const addressDisplay = result.addressData?.display_name || "Unknown Address";
     const measurements = result.measurements || { width: "N/A", length: "N/A", area: "N/A" };
@@ -247,6 +230,8 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     const lon = result.addressData?.lon || 0;
 
     const isCostReliable = isMeasurementsReliable || isWindowDoorCountReliable;
+    const hasValidCost = costEstimates && typeof costEstimates.totalCostLow === "number" && typeof costEstimates.totalCostHigh === "number" && costEstimates.totalCostLow > 0 && costEstimates.totalCostHigh > 0;
+    console.log("Frontend - Cost rendering check:", { isCostReliable, hasValidCost, costEstimates });
 
     let resultsHtml = `
       <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem;" role="region" aria-label="Remodel Estimate Results">
@@ -259,30 +244,20 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     `;
 
     if (!isMeasurementsReliable) {
-      resultsHtml += `
-        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Building dimensions are estimates due to limited data from OpenStreetMap. For accurate results, please verify the dimensions.</p>
-      `;
+      resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Building dimensions are estimates due to limited data from OpenStreetMap. For accurate results, please verify the dimensions.</p>`;
     }
 
     if (!roofInfo.isPitchReliable) {
       let pitchMessage = "Roof pitch is a default estimate.";
-      if (totalImages > 0) {
-        pitchMessage = "Roof pitch is a default estimate because the uploaded image could not be processed for analysis.";
-      }
+      if (totalImages > 0) pitchMessage = "Roof pitch is a default estimate because the uploaded image could not be processed for analysis.";
       pitchMessage += " Please upload a clear photo showing the roof for a more accurate assessment.";
-      resultsHtml += `
-        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">${pitchMessage}</p>
-      `;
+      resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">${pitchMessage}</p>`;
     } else {
-      resultsHtml += `
-        <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Roof pitch estimated from ${roofInfo.pitchSource === "user_image" ? "your uploaded photo" : "default"}.</p>
-      `;
+      resultsHtml += `<p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Roof pitch estimated from ${roofInfo.pitchSource === "user_image" ? "your uploaded photo" : "default"}.</p>`;
     }
 
     if (!isWindowDoorCountReliable && !windowCount && !doorCount) {
-      resultsHtml += `
-        <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Window and door counts are estimates. For better accuracy, provide counts or upload clear photos.</p>
-      `;
+      resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Window and door counts are estimates. For better accuracy, provide counts or upload clear photos.</p>`;
     }
 
     resultsHtml += `
@@ -291,9 +266,6 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Cost Estimate (Approximate)</h3>
     `;
 
-    // Ensure cost estimates are valid numbers and greater than 0
-    const hasValidCost = costEstimates && typeof costEstimates.totalCostLow === "number" && typeof costEstimates.totalCostHigh === "number" && costEstimates.totalCostLow > 0 && costEstimates.totalCostHigh > 0;
-
     if (isCostReliable && hasValidCost) {
       resultsHtml += `
         <p style="margin: 0.5rem 0;"><strong>Total:</strong> $${costEstimates.totalCostLow.toLocaleString()}–$${costEstimates.totalCostHigh.toLocaleString()}</p>
@@ -301,14 +273,10 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
         <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Costs are approximate and may vary based on final measurements, material prices, labor rates, and location-specific factors.</p>
       `;
       if (!isMeasurementsReliable || !isWindowDoorCountReliable) {
-        resultsHtml += `
-          <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">This estimate is based on partial data. For a more accurate estimate, upload clear photos or provide window/door counts.</p>
-        `;
+        resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">This estimate is based on partial data. For a more accurate estimate, upload clear photos or provide window/door counts.</p>`;
       }
     } else {
-      resultsHtml += `
-        <p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable. Please provide manual counts and sizes or upload clear photos of the house exterior.</p>
-      `;
+      resultsHtml += `<p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable. Please provide manual counts and sizes or upload clear photos of the house exterior.</p>`;
       console.log("Frontend - Cost estimate display fallback triggered. isCostReliable:", isCostReliable, "hasValidCost:", hasValidCost);
     }
 
@@ -321,7 +289,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
       <p style="margin: 0.5rem 0;"><a href="https://www.usa.gov/local-building-permits" target="_blank" style="color: #e67e22; text-decoration: none;">Learn More About Permits</a></p>
     `;
 
-    for (const direction of directions) {
+    DIRECTIONS.forEach(direction => {
       if (processedImages[direction]) {
         resultsHtml += `
           <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">${direction.charAt(0).toUpperCase() + direction.slice(1)}-Facing Image (Processed)</h3>
@@ -340,17 +308,13 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
           </div>
         `;
       }
-    }
+    });
 
     if (totalImages > 0) {
       if (windowDoorCount.windows === 0 && windowDoorCount.doors === 0 && !windowCount && !doorCount) {
-        resultsHtml += `
-          <p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Failed to detect windows or doors in uploaded image(s). Please upload clear photos of the house exterior or provide manual counts and sizes.</p>
-        `;
+        resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Failed to detect windows or doors in uploaded image(s). Please upload clear photos of the house exterior or provide manual counts and sizes.</p>`;
       } else {
-        resultsHtml += `
-          <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Processed ${Object.values(processedImages).length} user-uploaded image(s) for window and door detection. Up to 1 image per direction is processed.</p>
-        `;
+        resultsHtml += `<p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Processed ${Object.values(processedImages).length} user-uploaded image(s) for window and door detection. Up to 1 image per direction is processed.</p>`;
       }
     }
 
@@ -378,7 +342,7 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
     </div>
     `;
 
-    document.getElementById("results").innerHTML = resultsHtml;
+    $("results").innerHTML = resultsHtml;
   } catch (error) {
     console.error("Frontend - Fetch Error:", error);
     displayError(`Error: ${error.message}. Please try again or contact support.`);
@@ -388,136 +352,142 @@ document.getElementById("remodelForm").addEventListener("submit", async (e) => {
   }
 });
 
-// Photo upload and camera capture handlers
-const directions = ["north", "south", "east", "west"];
-directions.forEach(direction => {
-  document.getElementById(`${direction}Photos`).addEventListener("change", (e) => {
-    const preview = document.getElementById(`${direction}Preview`);
+// Photo Upload and Camera Capture Handlers
+DIRECTIONS.forEach(direction => {
+  // Handle File Uploads
+  $(`${direction}Photos`).addEventListener("change", (e) => {
+    const preview = $(`${direction}Preview`);
     preview.innerHTML = "";
     const files = Array.from(e.target.files);
     console.log(`Frontend - Selected ${files.length} files for ${direction} direction:`, files.map(file => file.name));
     files.forEach(file => {
       if (!file.type.startsWith("image/")) {
-        displayError(`Invalid file type for ${direction} photo. Please upload images (JPEG, PNG).`);
-        return;
+        return displayError(`Invalid file type for ${direction} photo. Please upload images (JPEG, PNG).`);
       }
-      const img = document.createElement("img");
-      img.src = URL.createObjectURL(file);
-      img.style.maxWidth = "150px";
-      img.style.borderRadius = "4px";
-      img.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-      img.style.margin = "5px";
-      img.alt = `${direction} preview image`;
+      const img = createElement("img", {
+        maxWidth: "150px",
+        borderRadius: "4px",
+        boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+        margin: "5px"
+      }, { alt: `${direction} preview image`, src: URL.createObjectURL(file) });
       preview.appendChild(img);
     });
   });
 
-  const retryInput = document.getElementById(`${direction}RetryPhotos`);
+  // Handle Retry Uploads
+  const retryInput = $(`${direction}RetryPhotos`);
   if (retryInput) {
     retryInput.addEventListener("change", (e) => {
-      const preview = document.getElementById(`${direction}RetryPreview`);
+      const preview = $(`${direction}RetryPreview`);
       preview.innerHTML = "";
       const files = Array.from(e.target.files);
       console.log(`Frontend - Selected ${files.length} retry files for ${direction} direction:`, files.map(file => file.name));
       files.forEach(file => {
         if (!file.type.startsWith("image/")) {
-          displayError(`Invalid file type for ${direction} retry photo. Please upload images (JPEG, PNG).`);
-          return;
+          return displayError(`Invalid file type for ${direction} retry photo. Please upload images (JPEG, PNG).`);
         }
-        const img = document.createElement("img");
-        img.src = URL.createObjectURL(file);
-        img.style.maxWidth = "150px";
-        img.style.borderRadius = "4px";
-        img.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-        img.style.margin = "5px";
-        img.alt = `${direction} retry preview image`;
+        const img = createElement("img", {
+          maxWidth: "150px",
+          borderRadius: "4px",
+          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+          margin: "5px"
+        }, { alt: `${direction} retry preview image`, src: URL.createObjectURL(file) });
         preview.appendChild(img);
       });
     });
   }
 
-  document.getElementById(`capture${direction.charAt(0).toUpperCase() + direction.slice(1)}`).addEventListener("click", async () => {
+  // Handle Camera Capture
+  $(`capture${direction.charAt(0).toUpperCase() + direction.slice(1)}`).addEventListener("click", async () => {
     let stream = null;
     try {
-      // Step 1: Enumerate devices for debugging purposes
+      // Step 1: Enumerate devices for debugging
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === "videoinput");
       console.log(`Frontend - Available video devices for ${direction}:`, videoDevices);
 
-      let frontCameraDeviceId = null;
+      // Step 2: Find the back camera by deviceId
+      let backCameraDeviceId = null;
       for (const device of videoDevices) {
-        // Look for labels indicating a front camera
-        if (device.label.toLowerCase().includes("front") || device.label.toLowerCase().includes("user")) {
-          frontCameraDeviceId = device.deviceId;
+        if (device.label.toLowerCase().includes("back") || device.label.toLowerCase().includes("rear") || device.label.toLowerCase().includes("environment")) {
+          backCameraDeviceId = device.deviceId;
           break;
         }
       }
 
-      // Step 2: Request the video stream, preferring the front camera
-      if (frontCameraDeviceId) {
-        console.log(`Frontend - Using front camera (deviceId: ${frontCameraDeviceId}) for ${direction}`);
+      // Step 3: Request the video stream with strict back camera constraints
+      if (backCameraDeviceId) {
+        console.log(`Frontend - Using back camera (deviceId: ${backCameraDeviceId}) for ${direction}`);
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: frontCameraDeviceId } },
+          video: { deviceId: { exact: backCameraDeviceId } },
           audio: false
         });
       } else {
-        console.log(`Frontend - Front camera not explicitly found for ${direction}, using facingMode: "user"`);
+        console.log(`Frontend - Back camera not explicitly found for ${direction}, using facingMode: "environment" with strict constraint`);
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user" }, // Use front camera
+          video: { facingMode: { exact: "environment" } },
           audio: false
         });
       }
 
-      // Step 3: Set up the video element
-      const video = document.createElement("video");
+      // Step 4: Verify we got the back camera
+      const track = stream.getVideoTracks()[0];
+      const settings = track.getSettings();
+      console.log(`Frontend - Camera settings for ${direction}:`, settings);
+      if (settings.facingMode !== "environment") {
+        stream.getTracks().forEach(track => track.stop());
+        throw new Error("Selected camera is not the back camera. This feature requires the back camera to photograph the house.");
+      }
+
+      // Step 5: Set up the video element
+      const video = createElement("video", { maxWidth: "100%", borderRadius: "4px" }, { autoplay: "", playsinline: "" });
       video.srcObject = stream;
-      video.setAttribute("autoplay", "");
-      video.setAttribute("playsinline", ""); // Ensure it works on iOS
 
-      // Step 4: Create a modal for capturing the photo
-      const modal = document.createElement("div");
-      modal.style.position = "fixed";
-      modal.style.top = "0";
-      modal.style.left = "0";
-      modal.style.width = "100%";
-      modal.style.height = "100%";
-      modal.style.background = "rgba(0, 0, 0, 0.8)";
-      modal.style.display = "flex";
-      modal.style.justifyContent = "center";
-      modal.style.alignItems = "center";
-      modal.style.zIndex = "1000";
+      // Step 6: Create a modal for capturing the photo
+      const modal = createElement("div", {
+        position: "fixed",
+        top: "0",
+        left: "0",
+        width: "100%",
+        height: "100%",
+        background: "rgba(0, 0, 0, 0.8)",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        zIndex: "1000"
+      });
 
-      const container = document.createElement("div");
-      container.style.background = "white";
-      container.style.padding = "20px";
-      container.style.borderRadius = "8px";
-      container.style.textAlign = "center";
-
-      video.style.maxWidth = "100%";
-      video.style.borderRadius = "4px";
+      const container = createElement("div", {
+        background: "white",
+        padding: "20px",
+        borderRadius: "8px",
+        textAlign: "center"
+      });
       container.appendChild(video);
 
-      const captureButton = document.createElement("button");
+      const captureButton = createElement("button", {
+        marginTop: "10px",
+        padding: "10px 20px",
+        backgroundColor: "#e67e22",
+        color: "white",
+        border: "none",
+        borderRadius: "4px",
+        cursor: "pointer"
+      });
       captureButton.innerText = "Capture Photo";
-      captureButton.style.marginTop = "10px";
-      captureButton.style.padding = "10px 20px";
-      captureButton.style.backgroundColor = "#e67e22";
-      captureButton.style.color = "white";
-      captureButton.style.border = "none";
-      captureButton.style.borderRadius = "4px";
-      captureButton.style.cursor = "pointer";
       container.appendChild(captureButton);
 
-      const cancelButton = document.createElement("button");
+      const cancelButton = createElement("button", {
+        marginTop: "10px",
+        marginLeft: "10px",
+        padding: "10px 20px",
+        backgroundColor: "#d32f2f",
+        color: "white",
+        border: "none",
+        borderRadius: "4px",
+        cursor: "pointer"
+      });
       cancelButton.innerText = "Cancel";
-      cancelButton.style.marginTop = "10px";
-      cancelButton.style.marginLeft = "10px";
-      cancelButton.style.padding = "10px 20px";
-      cancelButton.style.backgroundColor = "#d32f2f";
-      cancelButton.style.color = "white";
-      cancelButton.style.border = "none";
-      cancelButton.style.borderRadius = "4px";
-      cancelButton.style.cursor = "pointer";
       container.appendChild(cancelButton);
 
       modal.appendChild(container);
@@ -531,9 +501,9 @@ directions.forEach(direction => {
         };
       });
 
-      // Step 5: Capture the photo
+      // Step 7: Capture the photo
       captureButton.addEventListener("click", () => {
-        const canvas = document.createElement("canvas");
+        const canvas = createElement("canvas");
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
         const ctx = canvas.getContext("2d");
@@ -543,20 +513,18 @@ directions.forEach(direction => {
         const file = dataURLtoFile(dataUrl, `${direction}_photo.jpg`);
         const fileList = new DataTransfer();
         fileList.items.add(file);
-        document.getElementById(`${direction}Photos`).files = fileList.files;
+        $(`${direction}Photos`).files = fileList.files;
 
-        const preview = document.getElementById(`${direction}Preview`);
+        const preview = $(`${direction}Preview`);
         preview.innerHTML = "";
-        const img = document.createElement("img");
-        img.src = dataUrl;
-        img.style.maxWidth = "150px";
-        img.style.borderRadius = "4px";
-        img.style.boxShadow = "0 2px 4px rgba(0, 0, 0, 0.1)";
-        img.style.margin = "5px";
-        img.alt = `${direction} captured image`;
+        const img = createElement("img", {
+          maxWidth: "150px",
+          borderRadius: "4px",
+          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
+          margin: "5px"
+        }, { alt: `${direction} captured image`, src: dataUrl });
         preview.appendChild(img);
 
-        // Stop the stream and remove the modal
         stream.getTracks().forEach(track => track.stop());
         modal.remove();
       });
@@ -568,72 +536,13 @@ directions.forEach(direction => {
 
     } catch (error) {
       console.error(`Frontend - Error accessing camera for ${direction}:`, error);
-      let errorMessage = "Failed to access camera: " + error.message;
-      if (error.name === "OverconstrainedError") {
-        errorMessage += " The front camera may not be available. Please ensure permissions are granted or try uploading an image instead.";
+      let errorMessage = "Failed to access the back camera: " + error.message;
+      if (error.name === "OverconstrainedError" || error.message.includes("not the back camera")) {
+        errorMessage = "This feature requires the back camera to photograph the house, but it's not available. Please use a device with a back camera or upload an image instead.";
       } else if (error.name === "NotAllowedError") {
-        errorMessage += " Camera access was denied. Please allow camera permissions in your browser settings.";
+        errorMessage = "Camera access was denied. Please allow camera permissions in your browser settings.";
       }
       displayError(errorMessage);
     }
   });
 });
-
-// ... (Rest of the script.js remains unchanged, including the cost estimate fix)
-
-// Utility functions (ensure these are included)
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    if (!file || !file.type.startsWith("image/")) {
-      reject(new Error("Invalid file type. Please upload images (JPEG, PNG)."));
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      console.log(`Frontend - Converted file ${file.name} to base64, length: ${reader.result.length}`);
-      if (!reader.result || typeof reader.result !== "string") {
-        reject(new Error(`Failed to convert ${file.name} to base64.`));
-        return;
-      }
-      resolve(reader.result);
-    };
-    reader.onerror = () => {
-      console.error(`Frontend - Error reading file ${file.name}`);
-      reject(new Error(`Failed to read file ${file.name}.`));
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function dataURLtoFile(dataUrl, filename) {
-  const arr = dataUrl.split(",");
-  const mime = arr[0].match(/:(.*?);/)[1];
-  const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) {
-    u8arr[n] = bstr.charCodeAt(n);
-  }
-  return new File([u8arr], filename, { type: mime });
-}
-
-function displayError(message) {
-  document.getElementById("results").innerHTML = `
-    <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem; text-align: center;" role="alert">
-      <p style="color: #d32f2f; margin: 0.5rem 0;">${message}</p>
-      <p style="margin: 0.5rem 0;">Please try again or contact Indy Home Improvements at <a href="tel:7653663344" style="color: #e67e22; text-decoration: none;">765-366-3344</a> for assistance.</p>
-    </div>
-  `;
-}
-
-function displayWarning(message) {
-  console.log("Frontend - Warning:", message);
-  const resultsDiv = document.getElementById("results");
-  if (resultsDiv.innerHTML === "") {
-    resultsDiv.innerHTML = `
-      <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem; text-align: center;" role="alert">
-        <p style="color: #e67e22; margin: 0.5rem 0;">${message}</p>
-      </div>
-    `;
-  }
-}
