@@ -3,281 +3,130 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Remodel Tool - Indy Home Improvements</title>
-  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <title>Indy Home Improvements - Remodel Estimate</title>
   <style>
-    * {
+    body {
+      font-family: Arial, sans-serif;
       margin: 0;
       padding: 0;
-      box-sizing: border-box;
-    }
-    body {
-      font-family: 'Roboto', sans-serif;
-      background-color: #f8f9fa;
-      color: #333;
-      line-height: 1.6;
-    }
-    header {
-      background-color: #1a3c34;
-      color: white;
-      padding: 1rem 0;
-      text-align: center;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    header h1 {
-      font-size: 2rem;
-      margin-bottom: 0.5rem;
-    }
-    header p {
-      font-size: 1rem;
-      opacity: 0.9;
+      background-color: #f4f4f4;
     }
     .container {
-      max-width: 1200px;
-      margin: 0 auto;
+      max-width: 800px;
+      margin: 2rem auto;
       padding: 2rem;
-    }
-    main {
       background: white;
       border-radius: 8px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-      padding: 2rem;
-      margin-bottom: 2rem;
     }
-    h2 {
+    h1 {
       color: #1a3c34;
-      margin-bottom: 1rem;
-      font-size: 1.8rem;
       text-align: center;
     }
-    form {
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
     label {
-      font-weight: 700;
-      margin-bottom: 0.5rem;
-      color: #444;
+      display: block;
+      margin: 1rem 0 0.5rem;
+      font-weight: bold;
     }
     input[type="text"],
     input[type="number"],
-    input[type="file"],
     select {
       width: 100%;
-      padding: 0.75rem;
-      border: 1px solid #ddd;
+      padding: 0.5rem;
+      border: 1px solid #ccc;
       border-radius: 4px;
-      font-size: 1rem;
-      transition: border-color 0.3s;
-    }
-    input[type="text"]:focus,
-    input[type="number"]:focus,
-    input[type="file"]:focus,
-    select:focus {
-      border-color: #1a3c34;
-      outline: none;
-    }
-    select[multiple] {
-      height: 120px; /* Adjust height for multiple select */
+      box-sizing: border-box;
     }
     button {
+      display: block;
+      width: 100%;
+      padding: 0.75rem;
+      margin-top: 1rem;
       background-color: #e67e22;
       color: white;
       border: none;
-      padding: 0.75rem 1.5rem;
       border-radius: 4px;
-      font-size: 1.1rem;
+      font-weight: bold;
       cursor: pointer;
       transition: background-color 0.3s;
     }
     button:hover {
-      background-color: #d35400;
+      background-color: #d9721e;
     }
-    .photo-group {
-      margin-bottom: 1rem;
+    .photo-upload {
+      margin: 1rem 0;
     }
-    .image-preview {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-top: 0.5rem;
-    }
-    .image-preview img {
-      max-width: 150px;
-      border-radius: 4px;
-      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-    }
-    #results {
-      margin-top: 2rem;
-    }
-    #results h3 {
-      color: #1a3c34;
-      font-size: 1.5rem;
-      margin-bottom: 1rem;
-      text-align: center;
-    }
-    #results ul {
-      list-style-type: none;
-      padding: 0;
-      margin: 0;
-    }
-    #results li {
-      padding: 10px 0;
-      border-bottom: 1px solid #ddd;
-    }
-    #results li:last-child {
-      border-bottom: none;
-    }
-    #results .total {
-      font-size: 1.2rem;
-      font-weight: bold;
-      color: #e67e22;
-      text-align: center;
-      margin-bottom: 1rem;
-    }
-    #results .category {
-      font-weight: bold;
-      color: #1a3c34;
-    }
-    #results .sub-item {
-      margin-left: 20px;
-      color: #666;
-    }
-    #results .cost {
-      font-weight: bold;
-      float: right;
-    }
-    #results .details {
-      color: #666;
-      font-size: 0.9rem;
-      margin-left: 10px;
-    }
-    footer {
-      background-color: #1a3c34;
-      color: white;
-      text-align: center;
-      padding: 1rem;
-      position: relative;
-      bottom: 0;
+    #mapContainer {
+      height: 400px;
       width: 100%;
-    }
-    footer p {
-      margin: 0;
-      font-size: 0.9rem;
-    }
-    footer a {
-      color: #e67e22;
-      text-decoration: none;
-    }
-    footer a:hover {
-      text-decoration: underline;
+      display: none;
+      margin: 1rem 0;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Indy Home Improvements</h1>
-    <p>Transforming Your Home with Quality and Care</p>
-  </header>
-
   <div class="container">
-    <main>
-      <h2>Remodel Tool</h2>
-      <form id="remodelForm">
-        <div>
-          <label for="components">Select Components to Estimate :</label>
-          <select id="components" name="components" multiple required>
-            <option value="roof">Roof</option>
-            <option value="windows">Windows</option>
-            <option value="doors">Doors</option>
-            <option value="siding">Siding</option>
-          </select>
-        </div>
+    <h1>Indy Home Improvements - Remodel Estimate</h1>
+    <form id="remodelForm">
+      <label for="address">Address</label>
+      <input type="text" id="address" name="address" required placeholder="Enter your address">
 
-        <div>
-          <label for="address">Property Address:</label>
-          <input type="text" id="address" placeholder="1234 E 10th St, Indianapolis, IN 46202" required>
-        </div>
+      <!-- Map Container for Pin Dropping -->
+      <div id="mapContainer"></div>
 
-        <!-- North Direction -->
-        <div>
-          <label for="northPhotos">North-Facing Photo:</label>
-          <input type="file" id="northPhotos" accept="image/*" multiple>
-          <button type="button" id="captureNorth">Take Photo</button>
-          <div id="northPreview" style="margin-top: 10px;"></div>
-          <div id="northRetry" style="display: none; color: #d32f2f; margin-top: 10px;">
-            <p>Could not detect windows or doors in the north-facing photo. Please upload a closer photo of a window or door.</p>
-            <input type="file" id="northRetryPhotos" accept="image/*">
-            <div id="northRetryPreview" style="margin-top: 10px;"></div>
-          </div>
-        </div>
+      <label for="components">Select Components to Estimate</label>
+      <select id="components" name="components" multiple required>
+        <option value="roof">Roof</option>
+        <option value="windows">Windows</option>
+        <option value="doors">Doors</option>
+        <option value="siding">Siding</option>
+      </select>
 
-        <!-- South Direction -->
-        <div>
-          <label for="southPhotos">South-Facing Photo:</label>
-          <input type="file" id="southPhotos" accept="image/*" multiple>
-          <button type="button" id="captureSouth">Take Photo</button>
-          <div id="southPreview" style="margin-top: 10px;"></div>
-          <div id="southRetry" style="display: none; color: #d32f2f; margin-top: 10px;">
-            <p>Could not detect windows or doors in the south-facing photo. Please upload a closer photo of a window or door.</p>
-            <input type="file" id="southRetryPhotos" accept="image/*">
-            <div id="southRetryPreview" style="margin-top: 10px;"></div>
-          </div>
-        </div>
+      <label for="windowCount">Number of Windows (if estimating windows)</label>
+      <input type="number" id="windowCount" name="windowCount" min="0" placeholder="Enter number of windows">
 
-        <!-- East Direction -->
-        <div>
-          <label for="eastPhotos">East-Facing Photo:</label>
-          <input type="file" id="eastPhotos" accept="image/*" multiple>
-          <button type="button" id="captureEast">Take Photo</button>
-          <div id="eastPreview" style="margin-top: 10px;"></div>
-          <div id="eastRetry" style="display: none; color: #d32f2f; margin-top: 10px;">
-            <p>Could not detect windows or doors in the east-facing photo. Please upload a closer photo of a window or door.</p>
-            <input type="file" id="eastRetryPhotos" accept="image/*">
-            <div id="eastRetryPreview" style="margin-top: 10px;"></div>
-          </div>
-        </div>
+      <label for="doorCount">Number of Doors (if estimating doors)</label>
+      <input type="number" id="doorCount" name="doorCount" min="0" placeholder="Enter number of doors">
 
-        <!-- West Direction -->
-        <div>
-          <label for="westPhotos">West-Facing Photo:</label>
-          <input type="file" id="westPhotos" accept="image/*" multiple>
-          <button type="button" id="captureWest">Take Photo</button>
-          <div id="westPreview" style="margin-top: 10px;"></div>
-          <div id="westRetry" style="display: none; color: #d32f2f; margin-top: 10px;">
-            <p>Could not detect windows or doors in the west-facing photo. Please upload a closer photo of a window or door.</p>
-            <input type="file" id="westRetryPhotos" accept="image/*">
-            <div id="westRetryPreview" style="margin-top: 10px;"></div>
-          </div>
+      <div class="photo-upload">
+        <label>Upload Photos of Your House (Optional)</label>
+        <div class="photo-upload-section">
+          <label for="northPhotos">North-Facing Photo</label>
+          <input type="file" id="northPhotos" name="northPhotos" accept="image/*" multiple>
+          <button type="button" id="captureNorth">Capture North Photo</button>
+          <div id="northPreview"></div>
         </div>
-
-        <!-- Window and Door Counts -->
-        <div>
-          <label for="windowCount">Number of Windows (Optional):</label>
-          <input type="number" id="windowCount" min="0" placeholder="e.g., 4">
+        <div class="photo-upload-section">
+          <label for="southPhotos">South-Facing Photo</label>
+          <input type="file" id="southPhotos" name="southPhotos" accept="image/*" multiple>
+          <button type="button" id="captureSouth">Capture South Photo</button>
+          <div id="southPreview"></div>
         </div>
-        <div id="windowSizes" style="margin-top: 10px;"></div>
-
-        <div>
-          <label for="doorCount">Number of Doors (Optional):</label>
-          <input type="number" id="doorCount" min="0" placeholder="e.g., 2">
+        <div class="photo-upload-section">
+          <label for="eastPhotos">East-Facing Photo</label>
+          <input type="file" id="eastPhotos" name="eastPhotos" accept="image/*" multiple>
+          <button type="button" id="captureEast">Capture East Photo</button>
+          <div id="eastPreview"></div>
         </div>
-        <div id="doorSizes" style="margin-top: 10px;"></div>
-
-        <div style="text-align: center; margin-top: 20px;">
-          <button type="submit" style="padding: 10px 20px; background-color: #e67e22; color: white; border: none; border-radius: 4px; cursor: pointer;">Get Estimate</button>
+        <div class="photo-upload-section">
+          <label for="westPhotos">West-Facing Photo</label>
+          <input type="file" id="westPhotos" name="westPhotos" accept="image/*" multiple>
+          <button type="button" id="captureWest">Capture West Photo</button>
+          <div id="westPreview"></div>
         </div>
-      </form>
+      </div>
 
-      <div id="results" style="margin-top: 2rem;"></div>
-    </main>
+      <button type="submit">Get Estimate</button>
+    </form>
+
+    <div id="results"></div>
   </div>
 
-  <footer>
-    <p>© 2025 Indy Home Improvements. All rights reserved. | <a href="tel:7653663344">Call Us: 765-366-3344</a></p>
-  </footer>
-
+  <!-- Load Google Maps JavaScript API -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places"></script>
+  <!-- Load your script.js -->
   <script src="script.js"></script>
 </body>
 </html>
