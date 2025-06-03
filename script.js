@@ -173,7 +173,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
     const roofInfo = result.roofInfo || { pitch: "N/A", height: "N/A", roofArea: "N/A", roofMaterial: "N/A", isPitchReliable: false, pitchSource: "default" };
     const processedImages = result.processedImages || {};
     const allUploadedImages = result.allUploadedImages || {};
-    const streetViewImage = result.streetViewImage || null;
+    const satelliteViewImage = result.satelliteViewImage || null;
     const lat = result.addressData?.lat || 0;
     const lon = result.addressData?.lon || 0;
 
@@ -197,7 +197,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
     }
 
     if (!isMeasurementsReliable) {
-      resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Building dimensions are estimates due to limited data. For accurate results, please upload photos or verify the dimensions.</p>`;
+      resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Building dimensions are estimates based on ${totalImages === 0 ? "satellite imagery analysis or regional averages" : "your uploaded photos"}. For accurate results, please upload clear photos or verify the dimensions.</p>`;
     }
 
     if (!roofInfo.isPitchReliable && components.includes("roof")) {
@@ -222,7 +222,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
         <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Costs are approximate and may vary based on final measurements, material prices, labor rates, and location-specific factors.</p>
       `;
       if (!isMeasurementsReliable) {
-        resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">This estimate is based on default dimensions. For a more accurate estimate, upload clear photos.</p>`;
+        resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">This estimate is based on ${totalImages === 0 ? "satellite imagery analysis or regional averages" : "your uploaded photos"}. For a more accurate estimate, upload clear photos.</p>`;
       }
     } else {
       resultsHtml += `<p style="color: #d32f2f; margin: 0.5rem 0;">Unable to generate cost estimate due to missing data.</p>`;
@@ -263,13 +263,13 @@ $("remodelForm").addEventListener("submit", async (e) => {
       }
     });
 
-    // Display Street View image if no user images are uploaded and Street View is available
-    if (!hasUserImages && streetViewImage) {
+    // Display Satellite View image if no user images are uploaded and satellite view is available
+    if (!hasUserImages && satelliteViewImage) {
       resultsHtml += `
-        <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Street View Image (Google Maps)</h3>
+        <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Satellite View Image (Google Maps)</h3>
         <div style="text-align: center;">
-          <img src="${streetViewImage}" alt="Street View Image" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin: 1rem 0;">
-          <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Image sourced from Google Maps Street View. For more accurate estimates, upload your own photos.</p>
+          <img src="${satelliteViewImage}" alt="Satellite View Image" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin: 1rem 0;">
+          <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Image sourced from Google Maps Satellite View. Measurements ${isMeasurementsReliable ? "are based on this image" : "could not be determined accurately from this image; regional averages used instead"}.</p>
         </div>
       `;
     }
@@ -312,9 +312,8 @@ $("remodelForm").addEventListener("submit", async (e) => {
   }
 });
 
-// Photo Upload and Camera Capture Handlers
+// Photo Upload and Camera Capture Handlers (unchanged)
 DIRECTIONS.forEach(direction => {
-  // Handle File Uploads
   $(`${direction}Photos`).addEventListener("change", (e) => {
     const preview = $(`${direction}Preview`);
     preview.innerHTML = "";
@@ -334,17 +333,14 @@ DIRECTIONS.forEach(direction => {
     });
   });
 
-  // Handle Camera Capture
   $(`capture${direction.charAt(0).toUpperCase() + direction.slice(1)}`).addEventListener("click", async () => {
     let stream = null;
     let isBackCamera = true;
     try {
-      // Step 1: Enumerate devices for debugging
       const devices = await navigator.mediaDevices.enumerateDevices();
       const videoDevices = devices.filter(device => device.kind === "videoinput");
       console.log(`Frontend - Available video devices for ${direction}:`, videoDevices);
 
-      // Step 2: Find the back camera by deviceId
       let backCameraDeviceId = null;
       let frontCameraDeviceId = null;
       for (const device of videoDevices) {
@@ -357,7 +353,6 @@ DIRECTIONS.forEach(direction => {
         }
       }
 
-      // Step 3: Request the video stream with back camera preference
       try {
         if (backCameraDeviceId) {
           console.log(`Frontend - Using back camera (deviceId: ${backCameraDeviceId}) for ${direction}`);
@@ -376,7 +371,6 @@ DIRECTIONS.forEach(direction => {
         console.warn(`Frontend - Back camera unavailable for ${direction}:`, backCameraError);
         isBackCamera = false;
 
-        // Fallback to front camera if back camera fails
         if (frontCameraDeviceId) {
           console.log(`Frontend - Falling back to front camera (deviceId: ${frontCameraDeviceId}) for ${direction}`);
           stream = await navigator.mediaDevices.getUserMedia({
@@ -392,7 +386,6 @@ DIRECTIONS.forEach(direction => {
         }
       }
 
-      // Step 4: Verify camera type
       const track = stream.getVideoTracks()[0];
       const settings = track.getSettings();
       console.log(`Frontend - Camera settings for ${direction}:`, settings);
@@ -404,11 +397,9 @@ DIRECTIONS.forEach(direction => {
         displayWarning("Using front camera as the back camera is unavailable. Please ensure the photo captures the house exterior.");
       }
 
-      // Step 5: Set up the video element
       const video = createElement("video", { maxWidth: "100%", borderRadius: "4px" }, { autoplay: "", playsinline: "" });
       video.srcObject = stream;
 
-      // Step 6: Create a modal for capturing the photo
       const modal = createElement("div", {
         position: "fixed",
         top: "0",
@@ -458,7 +449,6 @@ DIRECTIONS.forEach(direction => {
       modal.appendChild(container);
       document.body.appendChild(modal);
 
-      // Wait for video to be ready
       await new Promise(resolve => {
         video.onloadedmetadata = () => {
           video.play();
@@ -466,7 +456,6 @@ DIRECTIONS.forEach(direction => {
         };
       });
 
-      // Step 7: Capture the photo
       captureButton.addEventListener("click", () => {
         const canvas = createElement("canvas");
         canvas.width = video.videoWidth;
