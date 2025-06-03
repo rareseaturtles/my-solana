@@ -89,6 +89,85 @@ async function convertPhotosToBase64(photoFiles, direction) {
   return results;
 }
 
+// Initialize Google Map for Pin Dropping
+let map, marker, userPinLatLng = null;
+
+async function initializeMap(initialLat, initialLng) {
+  const mapContainer = $("mapContainer");
+  if (!mapContainer) {
+    console.error("Frontend - Map container not found in DOM");
+    return;
+  }
+
+  try {
+    map = new google.maps.Map(mapContainer, {
+      center: { lat: initialLat, lng: initialLng },
+      zoom: 15,
+      mapTypeId: "satellite",
+    });
+
+    marker = new google.maps.Marker({
+      position: { lat: initialLat, lng: initialLng },
+      map: map,
+      draggable: true,
+      title: "Drag to mark your house",
+    });
+
+    // Update userPinLatLng when marker is dragged
+    google.maps.event.addListener(marker, "dragend", () => {
+      const position = marker.getPosition();
+      userPinLatLng = { lat: position.lat(), lng: position.lng() };
+      console.log(`Frontend - User dropped pin at:`, userPinLatLng);
+    });
+
+    // Allow clicking on the map to move the marker
+    map.addListener("click", (event) => {
+      marker.setPosition(event.latLng);
+      userPinLatLng = { lat: event.latLng.lat(), lng: event.latLng.lng() };
+      console.log(`Frontend - User clicked map to drop pin at:`, userPinLatLng);
+    });
+
+    mapContainer.style.display = "block";
+    console.log("Frontend - Map initialized with center:", { lat: initialLat, lng: initialLng });
+  } catch (error) {
+    console.error("Frontend - Error initializing Google Map:", error);
+    displayWarning("Unable to load map for pin dropping. Estimates will use address-based coordinates.");
+    mapContainer.style.display = "none";
+  }
+}
+
+// Address Input Handler to Initialize Map
+$("address").addEventListener("blur", async () => {
+  const address = $("address").value.trim();
+  if (!address) return;
+
+  try {
+    showProgress("Locating address...");
+    const addressResponse = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
+      { headers: { "User-Agent": "IndyHomeImprovements/1.0" } }
+    );
+    if (!addressResponse.ok) {
+      throw new Error("Failed to validate address");
+    }
+    const addressData = await addressResponse.json();
+    if (!addressData.length) {
+      throw new Error("Invalid address: No results found");
+    }
+
+    const lat = parseFloat(addressData[0].lat);
+    const lon = parseFloat(addressData[0].lon);
+    await initializeMap(lat, lon);
+    $("results").innerHTML = `
+      <p style="text-align: center; margin: 0.5rem 0;">Please drag the pin to the exact location of your house for a more accurate estimate, or proceed with the address-based location.</p>
+    `;
+  } catch (error) {
+    console.error("Frontend - Address validation error:", error);
+    displayWarning("Unable to locate address for map. Estimates will use address-based coordinates.");
+    $("mapContainer").style.display = "none";
+  }
+});
+
 // Form Submission Handler
 $("remodelForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -98,12 +177,12 @@ $("remodelForm").addEventListener("submit", async (e) => {
 
   try {
     const address = $("address").value.trim();
-    const components = Array.from($("components").selectedOptions).map(option => option.value);
+    const components = Array.from($("components").selectedOptions || []).map(option => option.value);
     const photos = {
-      north: Array.from($("northPhotos").files),
-      south: Array.from($("southPhotos").files),
-      east: Array.from($("eastPhotos").files),
-      west: Array.from($("westPhotos").files),
+      north: Array.from($("northPhotos").files || []),
+      south: Array.from($("southPhotos").files || []),
+      east: Array.from($("eastPhotos").files || []),
+      west: Array.from($("westPhotos").files || []),
     };
     const windowCount = parseInt($("windowCount").value) || 0;
     const doorCount = parseInt($("doorCount").value) || 0;
@@ -143,12 +222,22 @@ $("remodelForm").addEventListener("submit", async (e) => {
     }
     console.log("Frontend - Converted photos to base64:", Object.fromEntries(DIRECTIONS.map(dir => [dir, resolvedPhotos[dir].length])));
 
+    // Include userPinLatLng in the request if available
+    const requestData = {
+      address,
+      components,
+      photos: resolvedPhotos,
+      windowCount,
+      doorCount,
+      userPin: userPinLatLng || null, // Include user-selected coordinates if available
+    };
+
     // Send Request to Netlify Function
     showProgress("Generating estimate...");
-    console.log("Frontend - Sending request to /.netlify/functions/remodel with data:", { address, components, photos: resolvedPhotos, windowCount, doorCount });
+    console.log("Frontend - Sending request to /.netlify/functions/remodel with data:", requestData);
     const response = await fetch("/.netlify/functions/remodel", {
       method: "POST",
-      body: JSON.stringify({ address, components, photos: resolvedPhotos, windowCount, doorCount }),
+      body: JSON.stringify(requestData),
     });
     console.log("Frontend - Response status:", response.status);
 
