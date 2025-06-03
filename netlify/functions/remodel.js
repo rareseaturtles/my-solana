@@ -1,6 +1,6 @@
 const admin = require("firebase-admin");
-const fetch = require("node-fetch");
 
+// Remove node-fetch since fetch is natively supported in Node.js 18+
 exports.handler = async (event) => {
   try {
     // Initialize Firebase Admin
@@ -66,6 +66,7 @@ exports.handler = async (event) => {
       .filter(image => image && typeof image === "string" && image.startsWith("data:image/")).length;
 
     // Validate address using OpenStreetMap
+    // Note: Check Nominatim API usage policy in 2025 for rate limits or changes
     const addressResponse = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
       { headers: { "User-Agent": "IndyHomeImprovements/1.0" } }
@@ -109,6 +110,7 @@ exports.handler = async (event) => {
     if (totalImages === 0) {
       const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
       if (GOOGLE_MAPS_API_KEY) {
+        // Note: Verify Google Street View API compatibility and quotas in 2025
         const metadataUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
         const metadataResponse = await fetch(metadataUrl);
         if (metadataResponse.ok) {
@@ -189,6 +191,7 @@ function getLocationMultiplier(addressData) {
   let multiplierLow = 0.9;
   let multiplierHigh = 1.1;
 
+  // Note: Review location multipliers for 2025 based on regional cost trends
   if (address.includes("california") || address.includes("new york")) {
     multiplierLow = 1.2;
     multiplierHigh = 1.4;
@@ -232,6 +235,7 @@ async function getBuildingDataFromUserImages(photos) {
   }
 
   // Use Google Vision API to estimate building dimensions
+  // Note: Verify Google Vision API compatibility and quotas in 2025
   let scaleFactor = null;
   for (const direction of directions) {
     const images = photos[direction] || [];
@@ -361,7 +365,9 @@ async function saveImagesToStorage(photos, bucket) {
         const file = bucket.file(fileName);
         await file.save(imageBuffer, { metadata: { contentType: "image/jpeg" } });
 
-        const [url] = await file.getSignedUrl({ action: "read", expires: "03-09-2500" });
+        // Set signed URL expiration to 1 year from now (June 02, 2026)
+        const expirationDate = new Date("2026-06-02");
+        const [url] = await file.getSignedUrl({ action: "read", expires: expirationDate });
         allUploadedImages[direction].push(url);
       } catch (error) {
         console.error(`Backend - Error saving image for ${direction}:`, error);
@@ -387,8 +393,7 @@ function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo, com
   if (components.includes("siding")) {
     const sidingArea = area * 1.1;
     materialEstimates.push(`Siding: ${Math.round(sidingArea)} sq ft`);
-    const paintGallons = Math.ceil((area * 2) / 400);
-    materialEstimates.push(`Exterior Paint: ${paintGallons} gallons`);
+    // Removed Exterior Paint calculation
   }
 
   if (components.includes("windows")) {
@@ -416,12 +421,13 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
   const costBreakdown = [];
 
   // Updated cost ranges for 2025 (adjusted for inflation and market trends)
+  // Note: Verify these values with 2025 market data
   const costRanges = {
-    siding: { materialLow: 7, materialHigh: 12, laborLow: 4, laborHigh: 6 },
-    paint: { materialLow: 35, materialHigh: 55, laborLow: 1.5, laborHigh: 3 },
-    window: { materialLow: 450, materialHigh: 800, laborLow: 200, laborHigh: 350 },
-    door: { materialLow: 1200, materialHigh: 5000, laborLow: 400, laborHigh: 1200 }, // Updated for larger doors like French doors
-    roofing: { materialLow: 3, materialHigh: 5, laborLow: 2.5, laborHigh: 4 },
+    siding: { materialLow: 8, materialHigh: 14, laborLow: 5, laborHigh: 7 }, // Adjusted for potential 2025 inflation
+    window: { materialLow: 500, materialHigh: 900, laborLow: 250, laborHigh: 400 }, // Adjusted for 2025
+    door: { materialLow: 1300, materialHigh: 5500, laborLow: 450, laborHigh: 1300 }, // Adjusted for 2025
+    roofing: { materialLow: 4, materialHigh: 6, laborLow: 3, laborHigh: 5 }, // Adjusted for 2025
+    // Removed paint cost ranges
   };
 
   const { multiplierLow, multiplierHigh } = getLocationMultiplier(addressData);
@@ -439,18 +445,6 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
         costBreakdown.push(
           `Siding Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${sidingArea} sq ft at $${costRanges.siding?.materialLow || 0}–$${costRanges.siding?.materialHigh || 0}/sq ft)`,
           `Siding Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${sidingArea} sq ft at $${costRanges.siding?.laborLow || 0}–$${costRanges.siding?.laborHigh || 0}/sq ft)`
-        );
-      } else if (item.includes("Exterior Paint") && components.includes("siding")) {
-        const gallons = parseInt(item.match(/\d+/)[0]);
-        const materialCostLow = gallons * (costRanges.paint?.materialLow || 0) * multiplierLow;
-        const materialCostHigh = gallons * (costRanges.paint?.materialHigh || 0) * multiplierHigh;
-        const laborCostLow = area * (costRanges.paint?.laborLow || 0) * multiplierLow;
-        const laborCostHigh = area * (costRanges.paint?.laborHigh || 0) * multiplierHigh;
-        totalCostLow += materialCostLow + laborCostLow;
-        totalCostHigh += materialCostHigh + laborCostHigh;
-        costBreakdown.push(
-          `Exterior Paint Material: $${Math.round(materialCostLow)}–$${Math.round(materialCostHigh)} (${gallons} gallons at $${costRanges.paint?.materialLow || 0}–$${costRanges.paint?.materialHigh || 0}/gallon)`,
-          `Exterior Paint Labor: $${Math.round(laborCostLow)}–$${Math.round(laborCostHigh)} (${area} sq ft at $${costRanges.paint?.laborLow || 0}–$${costRanges.paint?.laborHigh || 0}/sq ft)`
         );
       } else if (item.includes("Window") && components.includes("windows")) {
         const materialCostLow = (costRanges.window?.materialLow || 0) * multiplierLow;
