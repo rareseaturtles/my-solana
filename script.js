@@ -76,21 +76,6 @@ function showProgress(message) {
   `;
 }
 
-function generateDynamicInputs(type, count, containerId) {
-  const container = $(containerId);
-  container.innerHTML = "";
-  for (let i = 0; i < count; i++) {
-    const div = createElement("div", { marginBottom: "10px" });
-    div.innerHTML = `
-      <label>${type} ${i + 1} Size (Width x Height in feet):</label>
-      <input type="number" step="0.1" min="0" id="${type.toLowerCase()}Width${i}" placeholder="Width (e.g., 3)" style="width: 80px;" required>
-      <span> x </span>
-      <input type="number" step="0.1" min="0" id="${type.toLowerCase()}Height${i}" placeholder="Height (e.g., ${type === "Window" ? 4 : 7})" style="width: 80px;" required>
-    `;
-    container.appendChild(div);
-  }
-}
-
 async function convertPhotosToBase64(photoFiles, direction) {
   const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Image processing timed out. Please try uploading smaller images.")), IMAGE_PROCESSING_TIMEOUT));
   const results = [];
@@ -104,10 +89,6 @@ async function convertPhotosToBase64(photoFiles, direction) {
   return results;
 }
 
-// Dynamic Input Generation
-$("windowCount").addEventListener("input", (e) => generateDynamicInputs("Window", parseInt(e.target.value) || 0, "windowSizes"));
-$("doorCount").addEventListener("input", (e) => generateDynamicInputs("Door", parseInt(e.target.value) || 0, "doorSizes"));
-
 // Form Submission Handler
 $("remodelForm").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -117,50 +98,31 @@ $("remodelForm").addEventListener("submit", async (e) => {
 
   try {
     const address = $("address").value.trim();
+    const components = Array.from($("components").selectedOptions).map(option => option.value);
     const photos = {
       north: Array.from($("northPhotos").files),
       south: Array.from($("southPhotos").files),
       east: Array.from($("eastPhotos").files),
       west: Array.from($("westPhotos").files),
     };
-    const windowCount = parseInt($("windowCount").value);
-    const doorCount = parseInt($("doorCount").value);
+    const windowCount = parseInt($("windowCount").value) || 0;
+    const doorCount = parseInt($("doorCount").value) || 0;
 
     // Validate Inputs
     if (!address) {
       throw new Error("Please enter a valid address.");
     }
 
-    if (isNaN(windowCount) || windowCount < 0) {
-      throw new Error("Please provide a valid window count (0 or more).");
+    if (components.length === 0) {
+      throw new Error("Please select at least one component to estimate (Roof, Windows, Doors, Siding).");
     }
 
-    if (isNaN(doorCount) || doorCount < 0) {
-      throw new Error("Please provide a valid door count (0 or more).");
+    if (components.includes("windows") && (isNaN(windowCount) || windowCount < 0)) {
+      throw new Error("Please provide a valid window count (0 or more) when estimating windows.");
     }
 
-    const windowSizes = [];
-    if (windowCount > 0) {
-      for (let i = 0; i < windowCount; i++) {
-        const width = parseFloat($(`windowWidth${i}`).value);
-        const height = parseFloat($(`windowHeight${i}`).value);
-        if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
-          throw new Error(`Please provide valid dimensions for Window ${i + 1} (positive numbers).`);
-        }
-        windowSizes.push(`${width}ft x ${height}ft`);
-      }
-    }
-
-    const doorSizes = [];
-    if (doorCount > 0) {
-      for (let i = 0; i < doorCount; i++) {
-        const width = parseFloat($(`doorWidth${i}`).value);
-        const height = parseFloat($(`doorHeight${i}`).value);
-        if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
-          throw new Error(`Please provide valid dimensions for Door ${i + 1} (positive numbers).`);
-        }
-        doorSizes.push(`${width}ft x ${height}ft`);
-      }
+    if (components.includes("doors") && (isNaN(doorCount) || doorCount < 0)) {
+      throw new Error("Please provide a valid door count (0 or more) when estimating doors.");
     }
 
     const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0);
@@ -183,10 +145,10 @@ $("remodelForm").addEventListener("submit", async (e) => {
 
     // Send Request to Netlify Function
     showProgress("Generating estimate...");
-    console.log("Frontend - Sending request to /.netlify/functions/remodel with data:", { address, photos: resolvedPhotos, windowCount, doorCount, windowSizes, doorSizes });
+    console.log("Frontend - Sending request to /.netlify/functions/remodel with data:", { address, components, photos: resolvedPhotos, windowCount, doorCount });
     const response = await fetch("/.netlify/functions/remodel", {
       method: "POST",
-      body: JSON.stringify({ address, photos: resolvedPhotos, windowCount, doorCount, windowSizes, doorSizes }),
+      body: JSON.stringify({ address, components, photos: resolvedPhotos, windowCount, doorCount }),
     });
     console.log("Frontend - Response status:", response.status);
 
@@ -204,7 +166,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
     const addressDisplay = result.addressData?.display_name || "Unknown Address";
     const measurements = result.measurements || { width: "N/A", length: "N/A", area: "N/A" };
     const isMeasurementsReliable = result.isMeasurementsReliable || false;
-    const windowDoorCount = result.windowDoorCount || { windows: 0, doors: 0, windowSizes: [], doorSizes: [], isReliable: true };
+    const windowDoorCount = result.windowDoorCount || { windows: 0, doors: 0, isReliable: true };
     const materialEstimates = result.materialEstimates || ["No estimates available"];
     const costEstimates = result.costEstimates || { totalCostLow: 0, totalCostHigh: 0, costBreakdown: ["No cost breakdown available"] };
     const timelineEstimate = result.timelineEstimate || "N/A";
@@ -221,24 +183,29 @@ $("remodelForm").addEventListener("submit", async (e) => {
     let resultsHtml = `
       <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem;" role="region" aria-label="Remodel Estimate Results">
         <h2 style="color: #1a3c34; margin-bottom: 1rem; font-size: 1.8rem; text-align: center;">Remodel Estimate</h2>
-        <p style="color: #666; font-size: 0.9rem; text-align: center; margin-bottom: 1rem;">Generated on June 02, 2025 at 10:04 PM EDT</p>
         <h3 style="color: #1a3c34; margin-bottom: 0.5rem; font-size: 1.3rem;">Project Overview</h3>
         <p style="margin: 0.5rem 0;"><strong>Address:</strong> ${addressDisplay}</p>
         <p style="margin: 0.5rem 0;"><strong>Dimensions:</strong> ${measurements.width}ft x ${measurements.length}ft (Area: ${measurements.area} sq ft)</p>
         <p style="margin: 0.5rem 0;"><strong>Height (Est.):</strong> ${roofInfo.height}ft | <strong>Roof Pitch:</strong> ${roofInfo.pitch}</p>
-        <p style="margin: 0.5rem 0;"><strong>Windows:</strong> ${windowDoorCount.windows} | <strong>Doors:</strong> ${windowDoorCount.doors}</p>
     `;
+
+    if (components.includes("windows") || components.includes("doors")) {
+      resultsHtml += `
+        <p style="margin: 0.5rem 0;"><strong>Windows:</strong> ${components.includes("windows") ? windowDoorCount.windows : "N/A"} | <strong>Doors:</strong> ${components.includes("doors") ? windowDoorCount.doors : "N/A"}</p>
+        <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Window and door dimensions will be measured on-site for accuracy.</p>
+      `;
+    }
 
     if (!isMeasurementsReliable) {
       resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Building dimensions are estimates due to limited data. For accurate results, please upload photos or verify the dimensions.</p>`;
     }
 
-    if (!roofInfo.isPitchReliable) {
+    if (!roofInfo.isPitchReliable && components.includes("roof")) {
       let pitchMessage = "Roof pitch is a default estimate.";
       if (totalImages > 0) pitchMessage = "Roof pitch is a default estimate because the uploaded images could not be processed for analysis.";
       pitchMessage += " Please upload a clear photo showing the roof for a more accurate assessment.";
       resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">${pitchMessage}</p>`;
-    } else {
+    } else if (components.includes("roof")) {
       resultsHtml += `<p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Roof pitch estimated from ${roofInfo.pitchSource === "user_image" ? "your uploaded photo" : "default"}.</p>`;
     }
 
@@ -324,7 +291,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
       `;
     }
 
-    const smsSummary = `Remodel at ${addressDisplay}: ${measurements.area}sqft, ${windowDoorCount.windows} windows, ${windowDoorCount.doors} doors, ~$${costEstimates.totalCostLow.toLocaleString()}–$${costEstimates.totalCostHigh.toLocaleString()}. Contact Indy Home Improvements for a detailed quote.`;
+    const smsSummary = `Remodel at ${addressDisplay}: ${measurements.area}sqft, ${components.includes("windows") ? windowDoorCount.windows + " windows" : ""}${components.includes("windows") && components.includes("doors") ? ", " : ""}${components.includes("doors") ? windowDoorCount.doors + " doors" : ""}, ~$${costEstimates.totalCostLow.toLocaleString()}–$${costEstimates.totalCostHigh.toLocaleString()}. Contact Indy Home Improvements for a detailed quote.`;
     resultsHtml += `
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Next Steps with Indy Home Improvements</h3>
       <p style="margin: 0.5rem 0;">Ready to discuss your project? Contact us directly to request more info or a detailed quote.</p>
