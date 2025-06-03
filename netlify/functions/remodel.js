@@ -1,6 +1,5 @@
 const admin = require("firebase-admin");
 
-// Remove node-fetch since fetch is natively supported in Node.js 18+
 exports.handler = async (event) => {
   try {
     // Initialize Firebase Admin
@@ -66,7 +65,6 @@ exports.handler = async (event) => {
       .filter(image => image && typeof image === "string" && image.startsWith("data:image/")).length;
 
     // Validate address using OpenStreetMap
-    // Note: Check Nominatim API usage policy in 2025 for rate limits or changes
     const addressResponse = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
       { headers: { "User-Agent": "IndyHomeImprovements/1.0" } }
@@ -84,7 +82,7 @@ exports.handler = async (event) => {
     const lon = parseFloat(addressData[0].lon);
 
     // Get building data using Google Vision API for dimensions if photos are provided
-    const buildingData = await getBuildingDataFromUserImages(photos);
+    const buildingData = await getBuildingDataFromUserImages(photos, lat, lon);
     const measurements = buildingData.measurements;
     const roofInfo = buildingData.roofInfo;
     const isMeasurementsReliable = buildingData.isReliable;
@@ -105,24 +103,16 @@ exports.handler = async (event) => {
       allUploadedImages = imageData.allUploadedImages;
     }
 
-    // Fetch Street View image if no photos are provided
-    let streetViewImage = null;
+    // Fetch Satellite View image if no photos are provided
+    let satelliteViewImage = null;
     if (totalImages === 0) {
       const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
       if (GOOGLE_MAPS_API_KEY) {
-        // Note: Verify Google Street View API compatibility and quotas in 2025
-        const metadataUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
-        const metadataResponse = await fetch(metadataUrl);
-        if (metadataResponse.ok) {
-          const metadata = await metadataResponse.json();
-          if (metadata.status === "OK") {
-            streetViewImage = `https://maps.googleapis.com/maps/api/streetview?size=600x400&location=${lat},${lon}&fov=90&heading=235&pitch=10&key=${GOOGLE_MAPS_API_KEY}`;
-          } else {
-            console.log(`Backend - Street View not available at ${lat},${lon}:`, metadata.status);
-          }
-        }
+        // Fetch a satellite image using Google Maps Static API
+        satelliteViewImage = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=18&size=600x400&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
+        console.log(`Backend - Fetched satellite view image for ${lat},${lon}`);
       } else {
-        console.warn("Backend - GOOGLE_MAPS_API_KEY not set, skipping Street View image fetch.");
+        console.warn("Backend - GOOGLE_MAPS_API_KEY not set, skipping satellite view image fetch.");
       }
     }
 
@@ -147,7 +137,7 @@ exports.handler = async (event) => {
       roofInfo,
       processedImages,
       allUploadedImages,
-      streetViewImage,
+      satelliteViewImage, // Updated to satellite view
       lat,
       lon,
     };
@@ -166,7 +156,7 @@ exports.handler = async (event) => {
       roofInfo,
       processedImages,
       allUploadedImages,
-      streetViewImage,
+      satelliteViewImage, // Updated to satellite view
       lat,
       lon,
     };
@@ -191,7 +181,6 @@ function getLocationMultiplier(addressData) {
   let multiplierLow = 0.9;
   let multiplierHigh = 1.1;
 
-  // Note: Review location multipliers for 2025 based on regional cost trends
   if (address.includes("california") || address.includes("new york")) {
     multiplierLow = 1.2;
     multiplierHigh = 1.4;
@@ -210,7 +199,7 @@ function getLocationMultiplier(addressData) {
   return { multiplierLow, multiplierHigh };
 }
 
-async function getBuildingDataFromUserImages(photos) {
+async function getBuildingDataFromUserImages(photos, lat, lon) {
   const directions = ["north", "south", "east", "west"];
   let width = 40, length = 32, area = 1280, isReliable = false;
   let pitch = "6/12", height = 16, roofArea = 1431, roofMaterial = "Asphalt Shingles";
@@ -220,7 +209,29 @@ async function getBuildingDataFromUserImages(photos) {
     .filter(image => image && typeof image === "string" && image.startsWith("data:image/")).length;
 
   if (totalImages === 0) {
-    // No photos provided, use default dimensions
+    // Instead of defaulting to 1280 sqft, attempt to fetch property data or use satellite imagery
+    // Option 1: Use a property data API (e.g., Zillow, Redfin) to get square footage
+    // Note: Zillow Property API or Redfin API could be used here to fetch property details, including square footage.
+    // Requires an API key and may incur costs. Example endpoint: https://api.zillow.com/v2/property (requires authentication).
+    // For now, we'll proceed with a satellite-based estimate placeholder.
+
+    // Option 2: Use Google Maps/Earth API to estimate area from satellite imagery
+    // Note: Automated roof measurement requires advanced AI (e.g., Sky Roof Measure, GAF QuickMeasure).
+    // For simplicity, we'll use a placeholder estimate and recommend a third-party service.
+    const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+    if (GOOGLE_MAPS_API_KEY) {
+      console.log(`Backend - Attempting to estimate area using satellite imagery for ${lat},${lon}`);
+      // Placeholder: In a real implementation, you'd use a service like Sky Roof Measure or integrate with Google Earth Engine
+      // to process satellite imagery and estimate the roof footprint. For now, we'll adjust the default slightly.
+      area = 1500; // Placeholder adjustment (replace with actual satellite-based estimate)
+      width = Math.round(Math.sqrt(area) * 1.25);
+      length = Math.round(area / width);
+      isReliable = false; // Mark as unreliable until a proper satellite-based solution is implemented
+      console.log(`Backend - Placeholder satellite estimate: ${area} sqft (recommended to use a service like Sky Roof Measure)`);
+    } else {
+      console.warn("Backend - GOOGLE_MAPS_API_KEY not set, using default area estimate.");
+    }
+
     const pitchFactor = { "4/12": 1.054, "6/12": 1.118, "8/12": 1.202 }[pitch] || 1.118;
     roofArea = area * pitchFactor;
     const baseHeight = 10;
@@ -234,8 +245,7 @@ async function getBuildingDataFromUserImages(photos) {
     };
   }
 
-  // Use Google Vision API to estimate building dimensions
-  // Note: Verify Google Vision API compatibility and quotas in 2025
+  // Use Google Vision API to estimate building dimensions from user-uploaded photos
   let scaleFactor = null;
   for (const direction of directions) {
     const images = photos[direction] || [];
@@ -279,7 +289,6 @@ async function getBuildingDataFromUserImages(photos) {
   }
 
   if (scaleFactor) {
-    // Use Google Vision API to detect building footprint
     for (const direction of directions) {
       const images = photos[direction] || [];
       for (const image of images) {
@@ -365,7 +374,6 @@ async function saveImagesToStorage(photos, bucket) {
         const file = bucket.file(fileName);
         await file.save(imageBuffer, { metadata: { contentType: "image/jpeg" } });
 
-        // Set signed URL expiration to 1 year from now (June 02, 2026)
         const expirationDate = new Date("2026-06-02");
         const [url] = await file.getSignedUrl({ action: "read", expires: expirationDate });
         allUploadedImages[direction].push(url);
@@ -393,7 +401,6 @@ function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo, com
   if (components.includes("siding")) {
     const sidingArea = area * 1.1;
     materialEstimates.push(`Siding: ${Math.round(sidingArea)} sq ft`);
-    // Removed Exterior Paint calculation
   }
 
   if (components.includes("windows")) {
@@ -420,14 +427,11 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
   let totalCostHigh = 0;
   const costBreakdown = [];
 
-  // Updated cost ranges for 2025 (adjusted for inflation and market trends)
-  // Note: Verify these values with 2025 market data
   const costRanges = {
-    siding: { materialLow: 8, materialHigh: 14, laborLow: 5, laborHigh: 7 }, // Adjusted for potential 2025 inflation
-    window: { materialLow: 500, materialHigh: 900, laborLow: 250, laborHigh: 400 }, // Adjusted for 2025
-    door: { materialLow: 1300, materialHigh: 5500, laborLow: 450, laborHigh: 1300 }, // Adjusted for 2025
-    roofing: { materialLow: 4, materialHigh: 6, laborLow: 3, laborHigh: 5 }, // Adjusted for 2025
-    // Removed paint cost ranges
+    siding: { materialLow: 8, materialHigh: 14, laborLow: 5, laborHigh: 7 },
+    window: { materialLow: 500, materialHigh: 900, laborLow: 250, laborHigh: 400 },
+    door: { materialLow: 1300, materialHigh: 5500, laborLow: 450, laborHigh: 1300 },
+    roofing: { materialLow: 4, materialHigh: 6, laborLow: 3, laborHigh: 5 },
   };
 
   const { multiplierLow, multiplierHigh } = getLocationMultiplier(addressData);
@@ -495,17 +499,17 @@ function calculateTimeline(area, windowDoorCount, components) {
   const { windows, doors } = windowDoorCount;
 
   if (components.includes("siding")) {
-    weeks += Math.ceil(area / 500); // Base timeline for siding
+    weeks += Math.ceil(area / 500);
   }
 
   if (components.includes("roof")) {
-    weeks += Math.ceil(area / 500); // Similar timeline for roofing
+    weeks += Math.ceil(area / 500);
   }
 
   if (components.includes("windows") || components.includes("doors")) {
     const additionalDays = (windows + doors);
-    weeks += Math.ceil(additionalDays / 5); // 1 week per 5 windows/doors
+    weeks += Math.ceil(additionalDays / 5);
   }
 
-  return Math.max(weeks, 1); // Ensure at least 1 week
+  return Math.max(weeks, 1);
 }
