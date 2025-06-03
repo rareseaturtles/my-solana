@@ -30,10 +30,18 @@ exports.handler = async (event) => {
       throw new Error("Invalid request body: Failed to parse JSON");
     }
 
-    const { address, photos, retryPhotos, windowCount, doorCount, windowSizes, doorSizes } = body;
+    const { address, photos, windowCount, doorCount, windowSizes, doorSizes } = body;
 
     if (!address) {
       throw new Error("Missing address in request body");
+    }
+
+    if (windowCount === undefined || windowCount < 0) {
+      throw new Error("Window count is required and must be 0 or greater");
+    }
+
+    if (doorCount === undefined || doorCount < 0) {
+      throw new Error("Door count is required and must be 0 or greater");
     }
 
     // Validate photo arrays
@@ -42,20 +50,6 @@ exports.handler = async (event) => {
       if (photos[direction] && !Array.isArray(photos[direction])) {
         throw new Error(`Invalid photos data for ${direction}: Expected an array`);
       }
-      if (retryPhotos && retryPhotos[direction] && !Array.isArray(retryPhotos[direction])) {
-        throw new Error(`Invalid retry photos data for ${direction}: Expected an array`);
-      }
-    }
-
-    const allImages = directions
-      .flatMap(direction => photos[direction] || [])
-      .filter(image => image && typeof image === "string" && image.startsWith("data:image/"));
-    const allRetryImages = directions
-      .flatMap(direction => (retryPhotos && retryPhotos[direction]) || [])
-      .filter(image => image && typeof image === "string" && image.startsWith("data:image/"));
-
-    if (allImages.length < 4 && allRetryImages.length < 4 && windowCount === null && doorCount === null) {
-      throw new Error("Please upload at least one photo for each direction (north, south, east, west) or provide window and door counts");
     }
 
     // Validate address using OpenStreetMap
@@ -75,61 +69,23 @@ exports.handler = async (event) => {
     const lat = parseFloat(addressData[0].lat);
     const lon = parseFloat(addressData[0].lon);
 
-    // Get building data (simplified without OpenCV)
-    const buildingData = await getBuildingDataFromUserImages(photos, retryPhotos);
+    // Get building data using Google Vision API for dimensions
+    const buildingData = await getBuildingDataFromUserImages(photos);
     const measurements = buildingData.measurements;
     const roofInfo = buildingData.roofInfo;
     const isMeasurementsReliable = buildingData.isReliable;
 
-    // Analyze windows and doors
-    let windowDoorInfo;
-    if (windowCount !== null && doorCount !== null && windowSizes && doorSizes) {
-      windowDoorInfo = {
-        windows: windowCount,
-        doors: doorCount,
-        windowSizes: windowSizes,
-        doorSizes: doorSizes,
-        images: {},
-        allUploadedImages: {},
-        isReliable: true,
-      };
-    } else {
-      windowDoorInfo = await analyzePhotosWithGoogleVision(photos, retryPhotos, bucket);
-      const retryDirections = windowDoorInfo.retryDirections || [];
-      if (retryDirections.length > 0) {
-        return {
-          statusCode: 200,
-          body: JSON.stringify({ retryDirections }),
-        };
-      }
-
-      if (!windowDoorInfo.isReliable && (!windowSizes || !doorSizes)) {
-        throw new Error("Failed to detect windows or doors, and no manual sizes provided. Please provide manual counts and sizes.");
-      }
-
-      if (windowSizes && doorSizes) {
-        windowDoorInfo.windowSizes = windowSizes;
-        windowDoorInfo.doorSizes = doorSizes;
-        windowDoorInfo.isReliable = true;
-      }
-    }
-
+    // Use provided window and door counts
     const windowDoorCount = {
-      windows: windowDoorInfo.windows,
-      doors: windowDoorInfo.doors,
-      windowSizes: windowDoorInfo.windowSizes,
-      doorSizes: windowDoorInfo.doorSizes,
-      isReliable: windowDoorInfo.isReliable,
+      windows: windowCount,
+      doors: doorCount,
+      windowSizes: windowSizes || [],
+      doorSizes: doorSizes || [],
+      isReliable: true, // Since counts are provided manually
     };
-    let processedImages = windowDoorInfo.images || {};
-    const allUploadedImages = windowDoorInfo.allUploadedImages || {};
 
-    // Clean up undefined processed images
-    for (const direction of directions) {
-      if (processedImages[direction] === undefined) {
-        delete processedImages[direction];
-      }
-    }
+    // Save images to Firebase Storage
+    const { processedImages, allUploadedImages } = await saveImagesToStorage(photos, bucket);
 
     // Calculate estimates
     const materialEstimates = calculateMaterialEstimates(measurements, windowDoorCount, roofInfo);
@@ -210,7 +166,7 @@ function getLocationMultiplier(addressData) {
   return { multiplierLow, multiplierHigh };
 }
 
-async function getBuildingDataFromUserImages(photos, retryPhotos) {
+async function getBuildingDataFromUserImages(photos) {
   const directions = ["north", "south", "east", "west"];
   let width = 40, length = 32, area = 1280, isReliable = false;
   let pitch = "6/12", height = 16, roofArea = 1431, roofMaterial = "Asphalt Shingles";
@@ -218,7 +174,7 @@ async function getBuildingDataFromUserImages(photos, retryPhotos) {
   // Use Google Vision API to estimate building dimensions
   let scaleFactor = null;
   for (const direction of directions) {
-    const images = (retryPhotos && retryPhotos[direction] && retryPhotos[direction].length > 0) ? retryPhotos[direction] : photos[direction] || [];
+    const images = photos[direction] || [];
     for (const image of images) {
       try {
         const base64Image = image.split(",")[1];
@@ -261,7 +217,7 @@ async function getBuildingDataFromUserImages(photos, retryPhotos) {
   if (scaleFactor) {
     // Use Google Vision API to detect building footprint
     for (const direction of directions) {
-      const images = (retryPhotos && retryPhotos[direction] && retryPhotos[direction].length > 0) ? retryPhotos[direction] : photos[direction] || [];
+      const images = photos[direction] || [];
       for (const image of images) {
         try {
           const base64Image = image.split(",")[1];
@@ -327,53 +283,14 @@ async function getBuildingDataFromUserImages(photos, retryPhotos) {
   return buildingData;
 }
 
-async function analyzePhotosWithGoogleVision(photos, retryPhotos, bucket) {
+async function saveImagesToStorage(photos, bucket) {
   const directions = ["north", "south", "east", "west"];
-  const allImages = directions.flatMap(direction => photos[direction] || []);
-  const allRetryImages = directions.flatMap(direction => (retryPhotos && retryPhotos[direction]) || []);
-
-  if (allImages.length < 4 && allRetryImages.length < 4) {
-    return {
-      windows: 0,
-      doors: 0,
-      windowSizes: [],
-      doorSizes: [],
-      images: {},
-      allUploadedImages: {},
-      isReliable: false,
-      retryDirections: directions,
-    };
-  }
-
-  const GOOGLE_VISION_API_KEY = process.env.GOOGLE_VISION_API_KEY;
-  if (!GOOGLE_VISION_API_KEY) {
-    return {
-      windows: 0,
-      doors: 0,
-      windowSizes: [],
-      doorSizes: [],
-      images: {},
-      allUploadedImages: {},
-      isReliable: false,
-      retryDirections: directions,
-    };
-  }
-
-  let windowCount = 0;
-  let doorCount = 0;
-  let windowSizes = [];
-  let doorSizes = [];
-  let processedImages = {};
+  const processedImages = {};
   const allUploadedImages = {};
-  let isReliable = false;
-  const retryDirections = [];
 
   for (const direction of directions) {
-    const images = (retryPhotos && retryPhotos[direction] && retryPhotos[direction].length > 0) ? retryPhotos[direction] : photos[direction] || [];
-    if (images.length === 0) {
-      retryDirections.push(direction);
-      continue;
-    }
+    const images = photos[direction] || [];
+    if (images.length === 0) continue;
 
     allUploadedImages[direction] = [];
     for (const [index, image] of images.entries()) {
@@ -395,77 +312,9 @@ async function analyzePhotosWithGoogleVision(photos, retryPhotos, bucket) {
     if (allUploadedImages[direction].length > 0) {
       processedImages[direction] = allUploadedImages[direction][0];
     }
-
-    let detectedInDirection = false;
-    for (const [index, image] of images.entries()) {
-      try {
-        const base64Image = image.split(",")[1];
-        const visionResponse = await fetch(
-          `https://vision.googleapis.com/v1/images:annotate?key=${GOOGLE_VISION_API_KEY}`,
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              requests: [
-                {
-                  image: { content: base64Image },
-                  features: [{ type: "OBJECT_LOCALIZATION" }],
-                },
-              ],
-            }),
-          }
-        );
-
-        if (!visionResponse.ok) {
-          retryDirections.push(direction);
-          continue;
-        }
-
-        const visionData = await visionResponse.json();
-        const objects = visionData.responses[0]?.localizedObjectAnnotations || [];
-        const windowsInImage = objects.filter(obj => obj.name.toLowerCase().includes("window") && obj.score > 0.4).length;
-        const doorsInImage = objects.filter(obj => obj.name.toLowerCase().includes("door") && obj.score > 0.4).length;
-
-        if (windowsInImage > 0) {
-          windowCount += windowsInImage;
-          for (let i = 0; i < windowsInImage; i++) {
-            windowSizes.push(Math.random() > 0.5 ? "4ft x 5ft" : "3ft x 4ft");
-          }
-        }
-
-        if (doorsInImage > 0) {
-          doorCount += doorsInImage;
-          for (let i = 0; i < doorsInImage; i++) {
-            doorSizes.push(Math.random() > 0.5 ? "3ft x 8ft" : "3ft x 7ft");
-          }
-        }
-
-        if (windowsInImage === 0 && doorsInImage === 0) {
-          retryDirections.push(direction);
-        } else {
-          detectedInDirection = true;
-          isReliable = true;
-        }
-      } catch (error) {
-        console.error(`Backend - Error analyzing image for ${direction}:`, error);
-        retryDirections.push(direction);
-      }
-    }
   }
 
-  const windowDoorInfo = {
-    windows: windowCount,
-    doors: doorCount,
-    windowSizes,
-    doorSizes,
-    images: processedImages,
-    allUploadedImages,
-    isReliable,
-    retryDirections,
-  };
-
-  console.log("Backend - Window/Door Info:", windowDoorInfo);
-  return windowDoorInfo;
+  return { processedImages, allUploadedImages };
 }
 
 function calculateMaterialEstimates(measurements, windowDoorCount, roofInfo) {
@@ -539,7 +388,7 @@ function calculateCostEstimates(materialEstimates, windowDoorCount, area, addres
     } else if (item.includes("Door")) {
       const materialCostLow = costRanges.door.materialLow * multiplierLow;
       const materialCostHigh = costRanges.door.materialHigh * multiplierHigh;
-      const laborCostLow = costRanges.door.laborLow * multiplierLow;
+      const laborCostLow = costRanges.dor.laborLow * multiplierLow;
       const laborCostHigh = costRanges.door.laborHigh * multiplierHigh;
       totalCostLow += materialCostLow + laborCostLow;
       totalCostHigh += materialCostHigh + laborCostHigh;
