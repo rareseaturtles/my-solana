@@ -2,6 +2,7 @@ const admin = require("firebase-admin");
 
 exports.handler = async (event) => {
   try {
+    // Initialize Firebase Admin if not already initialized
     if (!admin.apps.length) {
       admin.initializeApp({
         credential: admin.credential.cert({
@@ -15,6 +16,28 @@ exports.handler = async (event) => {
     const db = admin.firestore();
     const storage = admin.storage();
     const bucket = storage.bucket("turtle-treasure-giveaway.appspot.com");
+
+    // Handle GET request for API key
+    if (event.httpMethod === "GET" && event.queryStringParameters?.action === "get-api-key") {
+      const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+      if (!GOOGLE_MAPS_API_KEY) {
+        console.error("Backend - GOOGLE_MAPS_API_KEY not found in environment variables");
+        return {
+          statusCode: 500,
+          body: JSON.stringify({ error: "API key not configured on the server" }),
+        };
+      }
+      console.log("Backend - Successfully retrieved Google Maps API key for frontend");
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ apiKey: GOOGLE_MAPS_API_KEY }),
+      };
+    }
+
+    // Existing logic for remodel estimate (POST request)
+    if (event.httpMethod !== "POST") {
+      throw new Error("Method not allowed. Use POST for remodel estimates or GET with action=get-api-key for API key.");
+    }
 
     if (!event.body) {
       throw new Error("Missing request body");
@@ -61,7 +84,6 @@ exports.handler = async (event) => {
       .flatMap(direction => photos[direction] || [])
       .filter(image => image && typeof image === "string" && image.startsWith("data:image/")).length;
 
-    // Validate address using OpenStreetMap
     const addressResponse = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
       { headers: { "User-Agent": "IndyHomeImprovements/1.0" } }
@@ -78,13 +100,11 @@ exports.handler = async (event) => {
     let lat = parseFloat(addressData[0].lat);
     let lon = parseFloat(addressData[0].lon);
 
-    // Use userPin coordinates if provided and valid
     if (userPin && typeof userPin.lat === "number" && typeof userPin.lng === "number") {
       const userLat = userPin.lat;
       const userLng = userPin.lng;
-      // Validate userPin coordinates are within a reasonable distance from address coordinates
       const distance = Math.sqrt(Math.pow(userLat - lat, 2) + Math.pow(userLng - lon, 2));
-      if (distance < 0.01) { // Roughly 1km, adjust as needed
+      if (distance < 0.01) {
         lat = userLat;
         lon = userLng;
         console.log(`Backend - Using user-provided coordinates: lat=${lat}, lon=${lon}`);
@@ -116,7 +136,6 @@ exports.handler = async (event) => {
     if (totalImages === 0) {
       const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
       if (GOOGLE_MAPS_API_KEY) {
-        // Use higher zoom level if userPin is provided
         const zoomLevel = userPin ? 20 : 19;
         satelliteViewImage = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lon}&zoom=${zoomLevel}&size=800x600&maptype=satellite&key=${GOOGLE_MAPS_API_KEY}`;
         console.log(`Backend - Fetched satellite view image for ${lat},${lon} at zoom level ${zoomLevel}`);
