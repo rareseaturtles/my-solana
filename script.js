@@ -1,7 +1,7 @@
 // Constants
 const DIRECTIONS = ["north", "south", "east", "west"];
 const IMAGE_SIZE_LIMIT = 500 * 1024; // 500KB
-const IMAGE_PROCESSING_TIMEOUT = 10000; // 10 seconds
+const IMAGE_PROCESSING_TIMEOUT = 30000; // 30 seconds for better UX
 
 // Utility Functions
 function $(id) {
@@ -65,6 +65,15 @@ function displayWarning(message) {
       </div>
     `;
   }
+}
+
+function showProgress(message) {
+  $("results").innerHTML = `
+    <div style="text-align: center;">
+      <p>${message} <span class="spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #e67e22; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></span></p>
+    </div>
+    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+  `;
 }
 
 function generateDynamicInputs(type, count, containerId) {
@@ -171,7 +180,8 @@ $("remodelForm").addEventListener("submit", async (e) => {
       $(`${direction}Retry`).style.display = "none";
     });
 
-    // Convert Photos to Base64
+    // Convert Photos to Base64 with Progress Indicator
+    showProgress("Processing images...");
     const resolvedPhotos = {};
     const resolvedRetryPhotos = {};
     for (const direction of DIRECTIONS) {
@@ -182,15 +192,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
     console.log("Frontend - Converted retry photos to base64:", Object.fromEntries(DIRECTIONS.map(dir => [dir, resolvedRetryPhotos[dir].length])));
 
     // Send Request to Netlify Function
-    $("results").innerHTML = `
-      <div style="text-align: center;">
-        <p>Loading... <span class="spinner" style="display: inline-block; width: 16px; height: 16px; border: 2px solid #e67e22; border-top-color: transparent; border-radius: 50%; animation: spin 1s linear infinite;"></p>
-      </div>
-      <style>
-        @keyframes spin { to { transform: rotate(360deg); } }
-      </style>
-    `;
-
+    showProgress("Generating estimate...");
     console.log("Frontend - Sending request to /.netlify/functions/remodel with data:", { address, photos: resolvedPhotos, retryPhotos: resolvedRetryPhotos, windowCount, doorCount, windowSizes, doorSizes });
     const response = await fetch("/.netlify/functions/remodel", {
       method: "POST",
@@ -236,6 +238,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
     let resultsHtml = `
       <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem;" role="region" aria-label="Remodel Estimate Results">
         <h2 style="color: #1a3c34; margin-bottom: 1rem; font-size: 1.8rem; text-align: center;">Remodel Estimate</h2>
+        <p style="color: #666; font-size: 0.9rem; text-align: center; margin-bottom: 1rem;">Generated on June 02, 2025 at 09:34 PM EDT</p>
         <h3 style="color: #1a3c34; margin-bottom: 0.5rem; font-size: 1.3rem;">Project Overview</h3>
         <p style="margin: 0.5rem 0;"><strong>Address:</strong> ${addressDisplay}</p>
         <p style="margin: 0.5rem 0;"><strong>Dimensions:</strong> ${measurements.width}ft x ${measurements.length}ft (Area: ${measurements.area} sq ft)</p>
@@ -249,7 +252,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
 
     if (!roofInfo.isPitchReliable) {
       let pitchMessage = "Roof pitch is a default estimate.";
-      if (totalImages > 0) pitchMessage = "Roof pitch is a default estimate because the uploaded image could not be processed for analysis.";
+      if (totalImages > 0) pitchMessage = "Roof pitch is a default estimate because the uploaded images could not be processed for analysis.";
       pitchMessage += " Please upload a clear photo showing the roof for a more accurate assessment.";
       resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">${pitchMessage}</p>`;
     } else {
@@ -400,6 +403,7 @@ DIRECTIONS.forEach(direction => {
   // Handle Camera Capture
   $(`capture${direction.charAt(0).toUpperCase() + direction.slice(1)}`).addEventListener("click", async () => {
     let stream = null;
+    let isBackCamera = true;
     try {
       // Step 1: Enumerate devices for debugging
       const devices = await navigator.mediaDevices.enumerateDevices();
@@ -408,35 +412,62 @@ DIRECTIONS.forEach(direction => {
 
       // Step 2: Find the back camera by deviceId
       let backCameraDeviceId = null;
+      let frontCameraDeviceId = null;
       for (const device of videoDevices) {
-        if (device.label.toLowerCase().includes("back") || device.label.toLowerCase().includes("rear") || device.label.toLowerCase().includes("environment")) {
+        const label = device.label.toLowerCase();
+        if (label.includes("back") || label.includes("rear") || label.includes("environment")) {
           backCameraDeviceId = device.deviceId;
-          break;
+        }
+        if (label.includes("front") || label.includes("user")) {
+          frontCameraDeviceId = device.deviceId;
         }
       }
 
-      // Step 3: Request the video stream with strict back camera constraints
-      if (backCameraDeviceId) {
-        console.log(`Frontend - Using back camera (deviceId: ${backCameraDeviceId}) for ${direction}`);
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: backCameraDeviceId } },
-          audio: false
-        });
-      } else {
-        console.log(`Frontend - Back camera not explicitly found for ${direction}, using facingMode: "environment" with strict constraint`);
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { exact: "environment" } },
-          audio: false
-        });
+      // Step 3: Request the video stream with back camera preference
+      try {
+        if (backCameraDeviceId) {
+          console.log(`Frontend - Using back camera (deviceId: ${backCameraDeviceId}) for ${direction}`);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: backCameraDeviceId } },
+            audio: false
+          });
+        } else {
+          console.log(`Frontend - Back camera not explicitly found for ${direction}, using facingMode: "environment" with strict constraint`);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: { exact: "environment" } },
+            audio: false
+          });
+        }
+      } catch (backCameraError) {
+        console.warn(`Frontend - Back camera unavailable for ${direction}:`, backCameraError);
+        isBackCamera = false;
+
+        // Fallback to front camera if back camera fails
+        if (frontCameraDeviceId) {
+          console.log(`Frontend - Falling back to front camera (deviceId: ${frontCameraDeviceId}) for ${direction}`);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: frontCameraDeviceId } },
+            audio: false
+          });
+        } else {
+          console.log(`Frontend - Trying facingMode: "user" as fallback for ${direction}`);
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "user" },
+            audio: false
+          });
+        }
       }
 
-      // Step 4: Verify we got the back camera
+      // Step 4: Verify camera type
       const track = stream.getVideoTracks()[0];
       const settings = track.getSettings();
       console.log(`Frontend - Camera settings for ${direction}:`, settings);
-      if (settings.facingMode !== "environment") {
-        stream.getTracks().forEach(track => track.stop());
-        throw new Error("Selected camera is not the back camera. This feature requires the back camera to photograph the house.");
+      if (settings.facingMode === "user" && isBackCamera) {
+        isBackCamera = false;
+      }
+
+      if (!isBackCamera) {
+        displayWarning("Using front camera as the back camera is unavailable. Please ensure the photo captures the house exterior.");
       }
 
       // Step 5: Set up the video element
@@ -536,11 +567,11 @@ DIRECTIONS.forEach(direction => {
 
     } catch (error) {
       console.error(`Frontend - Error accessing camera for ${direction}:`, error);
-      let errorMessage = "Failed to access the back camera: " + error.message;
-      if (error.name === "OverconstrainedError" || error.message.includes("not the back camera")) {
-        errorMessage = "This feature requires the back camera to photograph the house, but it's not available. Please use a device with a back camera or upload an image instead.";
-      } else if (error.name === "NotAllowedError") {
+      let errorMessage = "Failed to access camera: " + error.message;
+      if (error.name === "NotAllowedError") {
         errorMessage = "Camera access was denied. Please allow camera permissions in your browser settings.";
+      } else if (error.name === "NotFoundError") {
+        errorMessage = "No camera found on this device. Please upload an image instead.";
       }
       displayError(errorMessage);
     }
