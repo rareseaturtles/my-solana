@@ -123,22 +123,24 @@ $("remodelForm").addEventListener("submit", async (e) => {
       east: Array.from($("eastPhotos").files),
       west: Array.from($("westPhotos").files),
     };
-    const retryPhotos = {
-      north: Array.from($("northRetryPhotos")?.files || []),
-      south: Array.from($("southRetryPhotos")?.files || []),
-      east: Array.from($("eastRetryPhotos")?.files || []),
-      west: Array.from($("westRetryPhotos")?.files || []),
-    };
-    const windowCount = parseInt($("windowCount").value) || null;
-    const doorCount = parseInt($("doorCount").value) || null;
+    const windowCount = parseInt($("windowCount").value);
+    const doorCount = parseInt($("doorCount").value);
 
     // Validate Inputs
     if (!address) {
       throw new Error("Please enter a valid address.");
     }
 
+    if (isNaN(windowCount) || windowCount < 0) {
+      throw new Error("Please provide a valid window count (0 or more).");
+    }
+
+    if (isNaN(doorCount) || doorCount < 0) {
+      throw new Error("Please provide a valid door count (0 or more).");
+    }
+
     const windowSizes = [];
-    if (windowCount) {
+    if (windowCount > 0) {
       for (let i = 0; i < windowCount; i++) {
         const width = parseFloat($(`windowWidth${i}`).value);
         const height = parseFloat($(`windowHeight${i}`).value);
@@ -150,7 +152,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
     }
 
     const doorSizes = [];
-    if (doorCount) {
+    if (doorCount > 0) {
       for (let i = 0; i < doorCount; i++) {
         const width = parseFloat($(`doorWidth${i}`).value);
         const height = parseFloat($(`doorHeight${i}`).value);
@@ -161,15 +163,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
       }
     }
 
-    const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0) +
-                        Object.values(retryPhotos).reduce((sum, arr) => sum + arr.length, 0);
-    if (totalImages === 0 && windowCount === null && doorCount === null) {
-      throw new Error("Please upload at least one photo for each direction or provide window and door counts.");
-    }
-
-    // Log Photo Inputs
-    console.log("Frontend - Raw photo inputs:", Object.fromEntries(DIRECTIONS.map(dir => [dir, photos[dir].map(file => file.name)])));
-    console.log("Frontend - Retry photo inputs:", Object.fromEntries(DIRECTIONS.map(dir => [dir, retryPhotos[dir].map(file => file.name)])));
+    const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0);
     console.log(`Frontend - Total images selected: ${totalImages}`);
 
     // Warn About Multiple Images
@@ -177,26 +171,22 @@ $("remodelForm").addEventListener("submit", async (e) => {
       if (photos[direction].length > 1) {
         displayWarning(`Multiple images uploaded for ${direction}. Only the first image will be processed for analysis, but all images will be saved.`);
       }
-      $(`${direction}Retry`).style.display = "none";
     });
 
     // Convert Photos to Base64 with Progress Indicator
     showProgress("Processing images...");
     const resolvedPhotos = {};
-    const resolvedRetryPhotos = {};
     for (const direction of DIRECTIONS) {
       resolvedPhotos[direction] = await convertPhotosToBase64(photos[direction], direction);
-      resolvedRetryPhotos[direction] = await convertPhotosToBase64(retryPhotos[direction], `${direction}Retry`);
     }
     console.log("Frontend - Converted photos to base64:", Object.fromEntries(DIRECTIONS.map(dir => [dir, resolvedPhotos[dir].length])));
-    console.log("Frontend - Converted retry photos to base64:", Object.fromEntries(DIRECTIONS.map(dir => [dir, resolvedRetryPhotos[dir].length])));
 
     // Send Request to Netlify Function
     showProgress("Generating estimate...");
-    console.log("Frontend - Sending request to /.netlify/functions/remodel with data:", { address, photos: resolvedPhotos, retryPhotos: resolvedRetryPhotos, windowCount, doorCount, windowSizes, doorSizes });
+    console.log("Frontend - Sending request to /.netlify/functions/remodel with data:", { address, photos: resolvedPhotos, windowCount, doorCount, windowSizes, doorSizes });
     const response = await fetch("/.netlify/functions/remodel", {
       method: "POST",
-      body: JSON.stringify({ address, photos: resolvedPhotos, retryPhotos: resolvedRetryPhotos, windowCount, doorCount, windowSizes, doorSizes }),
+      body: JSON.stringify({ address, photos: resolvedPhotos, windowCount, doorCount, windowSizes, doorSizes }),
     });
     console.log("Frontend - Response status:", response.status);
 
@@ -209,19 +199,12 @@ $("remodelForm").addEventListener("submit", async (e) => {
     console.log("Frontend - Server Response:", result);
     if (result.error) throw new Error(result.error);
 
-    // Handle Retry Directions
-    if (result.retryDirections && result.retryDirections.length > 0) {
-      result.retryDirections.forEach(direction => $(`${direction}Retry`).style.display = "block");
-      throw new Error("Failed to detect windows or doors in some images. Please upload closer photos as requested and resubmit.");
-    }
-
     // Process and Display Results
     const remodelId = result.remodelId || "unknown";
     const addressDisplay = result.addressData?.display_name || "Unknown Address";
     const measurements = result.measurements || { width: "N/A", length: "N/A", area: "N/A" };
     const isMeasurementsReliable = result.isMeasurementsReliable || false;
-    const windowDoorCount = result.windowDoorCount || { windows: 0, doors: 0, windowSizes: [], doorSizes: [], isReliable: false };
-    const isWindowDoorCountReliable = windowDoorCount.isReliable || false;
+    const windowDoorCount = result.windowDoorCount || { windows: 0, doors: 0, windowSizes: [], doorSizes: [], isReliable: true };
     const materialEstimates = result.materialEstimates || ["No estimates available"];
     const costEstimates = result.costEstimates || { totalCostLow: 0, totalCostHigh: 0, costBreakdown: ["No cost breakdown available"] };
     const timelineEstimate = result.timelineEstimate || "N/A";
@@ -231,14 +214,14 @@ $("remodelForm").addEventListener("submit", async (e) => {
     const lat = result.addressData?.lat || 0;
     const lon = result.addressData?.lon || 0;
 
-    const isCostReliable = isMeasurementsReliable || isWindowDoorCountReliable;
+    const isCostReliable = isMeasurementsReliable;
     const hasValidCost = costEstimates && typeof costEstimates.totalCostLow === "number" && typeof costEstimates.totalCostHigh === "number" && costEstimates.totalCostLow > 0 && costEstimates.totalCostHigh > 0;
     console.log("Frontend - Cost rendering check:", { isCostReliable, hasValidCost, costEstimates });
 
     let resultsHtml = `
       <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem;" role="region" aria-label="Remodel Estimate Results">
         <h2 style="color: #1a3c34; margin-bottom: 1rem; font-size: 1.8rem; text-align: center;">Remodel Estimate</h2>
-        <p style="color: #666; font-size: 0.9rem; text-align: center; margin-bottom: 1rem;">Generated on June 02, 2025 at 09:34 PM EDT</p>
+        <p style="color: #666; font-size: 0.9rem; text-align: center; margin-bottom: 1rem;">Generated on June 02, 2025 at 09:43 PM EDT</p>
         <h3 style="color: #1a3c34; margin-bottom: 0.5rem; font-size: 1.3rem;">Project Overview</h3>
         <p style="margin: 0.5rem 0;"><strong>Address:</strong> ${addressDisplay}</p>
         <p style="margin: 0.5rem 0;"><strong>Dimensions:</strong> ${measurements.width}ft x ${measurements.length}ft (Area: ${measurements.area} sq ft)</p>
@@ -259,10 +242,6 @@ $("remodelForm").addEventListener("submit", async (e) => {
       resultsHtml += `<p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Roof pitch estimated from ${roofInfo.pitchSource === "user_image" ? "your uploaded photo" : "default"}.</p>`;
     }
 
-    if (!isWindowDoorCountReliable && !windowCount && !doorCount) {
-      resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Window and door counts are estimates. For better accuracy, provide counts or upload clear photos.</p>`;
-    }
-
     resultsHtml += `
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Material Breakdown</h3>
       <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
@@ -275,11 +254,11 @@ $("remodelForm").addEventListener("submit", async (e) => {
         <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${costEstimates.costBreakdown.map(item => `<li>${item}</li>`).join("")}</ul>
         <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Costs are approximate and may vary based on final measurements, material prices, labor rates, and location-specific factors.</p>
       `;
-      if (!isMeasurementsReliable || !isWindowDoorCountReliable) {
-        resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">This estimate is based on partial data. For a more accurate estimate, upload clear photos or provide window/door counts.</p>`;
+      if (!isMeasurementsReliable) {
+        resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">This estimate is based on partial data. For a more accurate estimate, upload clear photos.</p>`;
       }
     } else {
-      resultsHtml += `<p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable. Please provide manual counts and sizes or upload clear photos of the house exterior.</p>`;
+      resultsHtml += `<p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable. Please upload clear photos of the house exterior to improve dimension accuracy.</p>`;
       console.log("Frontend - Cost estimate display fallback triggered. isCostReliable:", isCostReliable, "hasValidCost:", hasValidCost);
     }
 
@@ -314,11 +293,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
     });
 
     if (totalImages > 0) {
-      if (windowDoorCount.windows === 0 && windowDoorCount.doors === 0 && !windowCount && !doorCount) {
-        resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Failed to detect windows or doors in uploaded image(s). Please upload clear photos of the house exterior or provide manual counts and sizes.</p>`;
-      } else {
-        resultsHtml += `<p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Processed ${Object.values(processedImages).length} user-uploaded image(s) for window and door detection. Up to 1 image per direction is processed.</p>`;
-      }
+      resultsHtml += `<p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Processed ${Object.values(processedImages).length} user-uploaded image(s) for dimension estimation. Up to 1 image per direction is processed.</p>`;
     }
 
     if (lat && lon) {
@@ -376,29 +351,6 @@ DIRECTIONS.forEach(direction => {
       preview.appendChild(img);
     });
   });
-
-  // Handle Retry Uploads
-  const retryInput = $(`${direction}RetryPhotos`);
-  if (retryInput) {
-    retryInput.addEventListener("change", (e) => {
-      const preview = $(`${direction}RetryPreview`);
-      preview.innerHTML = "";
-      const files = Array.from(e.target.files);
-      console.log(`Frontend - Selected ${files.length} retry files for ${direction} direction:`, files.map(file => file.name));
-      files.forEach(file => {
-        if (!file.type.startsWith("image/")) {
-          return displayError(`Invalid file type for ${direction} retry photo. Please upload images (JPEG, PNG).`);
-        }
-        const img = createElement("img", {
-          maxWidth: "150px",
-          borderRadius: "4px",
-          boxShadow: "0 2px 4px rgba(0, 0, 0, 0.1)",
-          margin: "5px"
-        }, { alt: `${direction} retry preview image`, src: URL.createObjectURL(file) });
-        preview.appendChild(img);
-      });
-    });
-  }
 
   // Handle Camera Capture
   $(`capture${direction.charAt(0).toUpperCase() + direction.slice(1)}`).addEventListener("click", async () => {
