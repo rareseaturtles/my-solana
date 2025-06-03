@@ -211,17 +211,17 @@ $("remodelForm").addEventListener("submit", async (e) => {
     const roofInfo = result.roofInfo || { pitch: "N/A", height: "N/A", roofArea: "N/A", roofMaterial: "N/A", isPitchReliable: false, pitchSource: "default" };
     const processedImages = result.processedImages || {};
     const allUploadedImages = result.allUploadedImages || {};
+    const streetViewImage = result.streetViewImage || null;
     const lat = result.addressData?.lat || 0;
     const lon = result.addressData?.lon || 0;
 
-    const isCostReliable = isMeasurementsReliable;
     const hasValidCost = costEstimates && typeof costEstimates.totalCostLow === "number" && typeof costEstimates.totalCostHigh === "number" && costEstimates.totalCostLow > 0 && costEstimates.totalCostHigh > 0;
-    console.log("Frontend - Cost rendering check:", { isCostReliable, hasValidCost, costEstimates });
+    console.log("Frontend - Cost rendering check:", { isMeasurementsReliable, hasValidCost, costEstimates });
 
     let resultsHtml = `
       <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem;" role="region" aria-label="Remodel Estimate Results">
         <h2 style="color: #1a3c34; margin-bottom: 1rem; font-size: 1.8rem; text-align: center;">Remodel Estimate</h2>
-        <p style="color: #666; font-size: 0.9rem; text-align: center; margin-bottom: 1rem;">Generated on June 02, 2025 at 09:43 PM EDT</p>
+        <p style="color: #666; font-size: 0.9rem; text-align: center; margin-bottom: 1rem;">Generated on June 02, 2025 at 10:04 PM EDT</p>
         <h3 style="color: #1a3c34; margin-bottom: 0.5rem; font-size: 1.3rem;">Project Overview</h3>
         <p style="margin: 0.5rem 0;"><strong>Address:</strong> ${addressDisplay}</p>
         <p style="margin: 0.5rem 0;"><strong>Dimensions:</strong> ${measurements.width}ft x ${measurements.length}ft (Area: ${measurements.area} sq ft)</p>
@@ -230,7 +230,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
     `;
 
     if (!isMeasurementsReliable) {
-      resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Building dimensions are estimates due to limited data from OpenStreetMap. For accurate results, please verify the dimensions.</p>`;
+      resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Building dimensions are estimates due to limited data. For accurate results, please upload photos or verify the dimensions.</p>`;
     }
 
     if (!roofInfo.isPitchReliable) {
@@ -248,18 +248,18 @@ $("remodelForm").addEventListener("submit", async (e) => {
       <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Cost Estimate (Approximate)</h3>
     `;
 
-    if (isCostReliable && hasValidCost) {
+    if (hasValidCost) {
       resultsHtml += `
         <p style="margin: 0.5rem 0;"><strong>Total:</strong> $${costEstimates.totalCostLow.toLocaleString()}–$${costEstimates.totalCostHigh.toLocaleString()}</p>
         <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${costEstimates.costBreakdown.map(item => `<li>${item}</li>`).join("")}</ul>
         <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Costs are approximate and may vary based on final measurements, material prices, labor rates, and location-specific factors.</p>
       `;
       if (!isMeasurementsReliable) {
-        resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">This estimate is based on partial data. For a more accurate estimate, upload clear photos.</p>`;
+        resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">This estimate is based on default dimensions. For a more accurate estimate, upload clear photos.</p>`;
       }
     } else {
-      resultsHtml += `<p style="color: #d32f2f; margin: 0.5rem 0;">Cost estimate unavailable. Please upload clear photos of the house exterior to improve dimension accuracy.</p>`;
-      console.log("Frontend - Cost estimate display fallback triggered. isCostReliable:", isCostReliable, "hasValidCost:", hasValidCost);
+      resultsHtml += `<p style="color: #d32f2f; margin: 0.5rem 0;">Unable to generate cost estimate due to missing data.</p>`;
+      console.log("Frontend - Cost estimate display fallback triggered. hasValidCost:", hasValidCost);
     }
 
     resultsHtml += `
@@ -271,8 +271,11 @@ $("remodelForm").addEventListener("submit", async (e) => {
       <p style="margin: 0.5rem 0;"><a href="https://www.usa.gov/local-building-permits" target="_blank" style="color: #e67e22; text-decoration: none;">Learn More About Permits</a></p>
     `;
 
+    // Display user-uploaded images if available
+    let hasUserImages = false;
     DIRECTIONS.forEach(direction => {
       if (processedImages[direction]) {
+        hasUserImages = true;
         resultsHtml += `
           <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">${direction.charAt(0).toUpperCase() + direction.slice(1)}-Facing Image (Processed)</h3>
           <div style="text-align: center;">
@@ -281,6 +284,7 @@ $("remodelForm").addEventListener("submit", async (e) => {
         `;
       }
       if (allUploadedImages[direction] && allUploadedImages[direction].length > 0) {
+        hasUserImages = true;
         resultsHtml += `
           <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">${direction.charAt(0).toUpperCase() + direction.slice(1)}-Facing Images (All Uploaded)</h3>
           <div style="text-align: center;">
@@ -291,6 +295,17 @@ $("remodelForm").addEventListener("submit", async (e) => {
         `;
       }
     });
+
+    // Display Street View image if no user images are uploaded and Street View is available
+    if (!hasUserImages && streetViewImage) {
+      resultsHtml += `
+        <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Street View Image (Google Maps)</h3>
+        <div style="text-align: center;">
+          <img src="${streetViewImage}" alt="Street View Image" style="max-width: 100%; border-radius: 8px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); margin: 1rem 0;">
+          <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Image sourced from Google Maps Street View. For more accurate estimates, upload your own photos.</p>
+        </div>
+      `;
+    }
 
     if (totalImages > 0) {
       resultsHtml += `<p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Processed ${Object.values(processedImages).length} user-uploaded image(s) for dimension estimation. Up to 1 image per direction is processed.</p>`;
