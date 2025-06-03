@@ -52,6 +52,10 @@ exports.handler = async (event) => {
       }
     }
 
+    const totalImages = directions
+      .flatMap(direction => photos[direction] || [])
+      .filter(image => image && typeof image === "string" && image.startsWith("data:image/")).length;
+
     // Validate address using OpenStreetMap
     const addressResponse = await fetch(
       `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}`,
@@ -69,7 +73,7 @@ exports.handler = async (event) => {
     const lat = parseFloat(addressData[0].lat);
     const lon = parseFloat(addressData[0].lon);
 
-    // Get building data using Google Vision API for dimensions
+    // Get building data using Google Vision API for dimensions if photos are provided
     const buildingData = await getBuildingDataFromUserImages(photos);
     const measurements = buildingData.measurements;
     const roofInfo = buildingData.roofInfo;
@@ -84,8 +88,36 @@ exports.handler = async (event) => {
       isReliable: true, // Since counts are provided manually
     };
 
-    // Save images to Firebase Storage
-    const { processedImages, allUploadedImages } = await saveImagesToStorage(photos, bucket);
+    // Save images to Firebase Storage if photos are provided
+    let processedImages = {};
+    let allUploadedImages = {};
+    if (totalImages > 0) {
+      const imageData = await saveImagesToStorage(photos, bucket);
+      processedImages = imageData.processedImages;
+      allUploadedImages = imageData.allUploadedImages;
+    }
+
+    // Fetch Street View image if no photos are provided
+    let streetViewImage = null;
+    if (totalImages === 0) {
+      const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+      if (GOOGLE_MAPS_API_KEY) {
+        // First, check if Street View is available at this location using the Street View Metadata API
+        const metadataUrl = `https://maps.googleapis.com/maps/api/streetview/metadata?location=${lat},${lon}&key=${GOOGLE_MAPS_API_KEY}`;
+        const metadataResponse = await fetch(metadataUrl);
+        if (metadataResponse.ok) {
+          const metadata = await metadataResponse.json();
+          if (metadata.status === "OK") {
+            // Street View is available, fetch the image
+            streetViewImage = `https://maps.googleapis.com/maps/api/streetview?size=600x400&location=${lat},${lon}&fov=90&heading=235&pitch=10&key=${GOOGLE_MAPS_API_KEY}`;
+          } else {
+            console.log(`Backend - Street View not available at ${lat},${lon}:`, metadata.status);
+          }
+        }
+      } else {
+        console.warn("Backend - GOOGLE_MAPS_API_KEY not set, skipping Street View image fetch.");
+      }
+    }
 
     // Calculate estimates
     const materialEstimates = calculateMaterialEstimates(measurements, windowDoorCount, roofInfo);
@@ -107,6 +139,7 @@ exports.handler = async (event) => {
       roofInfo,
       processedImages,
       allUploadedImages,
+      streetViewImage,
       lat,
       lon,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -126,6 +159,9 @@ exports.handler = async (event) => {
       roofInfo,
       processedImages,
       allUploadedImages,
+      streetViewImage,
+      lat,
+      lon,
     };
 
     console.log("Backend - Final Response:", response);
@@ -170,6 +206,25 @@ async function getBuildingDataFromUserImages(photos) {
   const directions = ["north", "south", "east", "west"];
   let width = 40, length = 32, area = 1280, isReliable = false;
   let pitch = "6/12", height = 16, roofArea = 1431, roofMaterial = "Asphalt Shingles";
+
+  const totalImages = directions
+    .flatMap(direction => photos[direction] || [])
+    .filter(image => image && typeof image === "string" && image.startsWith("data:image/")).length;
+
+  if (totalImages === 0) {
+    // No photos provided, use default dimensions
+    const pitchFactor = { "4/12": 1.054, "6/12": 1.118, "8/12": 1.202 }[pitch] || 1.118;
+    roofArea = area * pitchFactor;
+    const baseHeight = 10;
+    const roofHeight = (width / 2) * (parseInt(pitch.split("/")[0]) / 12);
+    height = baseHeight + roofHeight;
+
+    return {
+      measurements: { width, length, area },
+      roofInfo: { pitch, height: Math.round(height), roofArea: Math.round(roofArea), roofMaterial, isPitchReliable: false, pitchSource: "default" },
+      isReliable,
+    };
+  }
 
   // Use Google Vision API to estimate building dimensions
   let scaleFactor = null;
