@@ -99,6 +99,101 @@ async function convertPhotosToBase64(photoFiles, direction) {
   return results;
 }
 
+// Wallet Authentication
+let publicKey = null;
+let isAdmin = false;
+
+async function connectWallet() {
+  let walletProvider = null;
+  if (window.solana && window.solana.isPhantom) walletProvider = window.solana;
+  else if (window.backpack) walletProvider = window.backpack;
+  else if (window.solflare) walletProvider = window.solflare;
+  else {
+    const status = $("wallet-status");
+    if (status) {
+      status.innerHTML = 'No wallet detected. Install <a href="https://phantom.app/" target="_blank">Phantom</a>, <a href="https://backpack.app/" target="_blank">Backpack</a>, or <a href="https://solflare.com/" target="_blank">Solflare</a>.';
+    }
+    return;
+  }
+  try {
+    const resp = await walletProvider.connect();
+    publicKey = resp.publicKey.toString();
+    if (publicKey.length !== 44 || !/^[1-9A-HJ-NP-Za-km-z]+$/.test(publicKey)) {
+      throw new Error("Invalid Solana public key format");
+    }
+    if (!solanaWeb3.PublicKey.isOnCurve(new solanaWeb3.PublicKey(publicKey))) {
+      throw new Error("Invalid Solana public key");
+    }
+    const status = $("wallet-status");
+    if (status) status.textContent = `Connected: ${publicKey.slice(0, 6)}...${publicKey.slice(-4)}`;
+    const connectBtn = $("connect-btn");
+    const disconnectBtn = $("disconnect-btn");
+    if (connectBtn) connectBtn.style.display = 'none';
+    if (disconnectBtn) disconnectBtn.style.display = 'block';
+
+    const adminCheckResponse = await fetch('/.netlify/functions/check-admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ wallet: publicKey })
+    });
+    if (!adminCheckResponse.ok) {
+      throw new Error(`Failed to check admin status: ${adminCheckResponse.statusText}`);
+    }
+    const { isAdmin } = await adminCheckResponse.json();
+    const adminBtn = $("admin-btn");
+    if (adminBtn) adminBtn.style.display = isAdmin ? 'block' : 'none';
+    if (status && !isAdmin) status.textContent = 'Unauthorized wallet. Admin access denied.';
+  } catch (error) {
+    console.error('connectWallet: Error:', error.message);
+    const status = $("wallet-status");
+    if (status) status.textContent = `Connection failed: ${error.message}`;
+  }
+}
+
+async function disconnectWallet() {
+  let walletProvider = null;
+  if (window.solana && window.solana.isPhantom) walletProvider = window.solana;
+  else if (window.backpack) walletProvider = window.backpack;
+  else if (window.solflare) walletProvider = window.solflare;
+  try {
+    if (walletProvider && walletProvider.disconnect) await walletProvider.disconnect();
+    publicKey = null;
+    isAdmin = false;
+    const status = $("wallet-status");
+    if (status) status.textContent = 'Connect your wallet for admin access.';
+    const connectBtn = $("connect-btn");
+    const disconnectBtn = $("disconnect-btn");
+    const adminBtn = $("admin-btn");
+    if (connectBtn) connectBtn.style.display = 'block';
+    if (disconnectBtn) disconnectBtn.style.display = 'none';
+    if (adminBtn) adminBtn.style.display = 'none';
+  } catch (error) {
+    console.error('disconnectWallet: Error:', error.message);
+    const status = $("wallet-status");
+    if (status) status.textContent = `Disconnection failed: ${error.message}`;
+  }
+}
+
+// Swiper Initialization
+function initSwiper() {
+  new Swiper('.swiper', {
+    loop: true,
+    pagination: {
+      el: '.swiper-pagination',
+      clickable: true,
+    },
+    navigation: {
+      nextEl: '.swiper-button-next',
+      prevEl: '.swiper-button-prev',
+    },
+  });
+}
+
+// Remodel Tool
+function openRemodelTool() {
+  window.location.href = "/remodel-tool";
+}
+
 // Load Google Maps API dynamically
 let map, marker, userPinLatLng = null;
 let isGoogleMapsLoaded = false;
@@ -117,7 +212,6 @@ async function loadGoogleMapsApi() {
       throw new Error(data.error);
     }
     const apiKey = data.apiKey;
-
     console.log("Frontend - Successfully retrieved Google Maps API key");
     return new Promise((resolve, reject) => {
       const script = document.createElement("script");
@@ -149,31 +243,26 @@ async function initializeMap(initialLat, initialLng) {
     displayWarning("Map container not found. Estimates will use address-based coordinates.");
     return;
   }
-
   if (!isGoogleMapsLoaded) {
     console.error("Frontend - Google Maps API not loaded. Cannot initialize map.");
     displayWarning("Unable to load Google Maps. Please proceed with the estimate using address-based coordinates, or try again later.");
     mapContainer.style.display = "none";
     return;
   }
-
   try {
     console.log("Frontend - Attempting to initialize Google Map with center:", { lat: initialLat, lng: initialLng });
-    mapContainer.style.display = "block"; // Ensure the container is visible before initializing
+    mapContainer.style.display = "block";
     map = new google.maps.Map(mapContainer, {
       center: { lat: initialLat, lng: initialLng },
       zoom: 15,
       mapTypeId: "satellite",
     });
-
     marker = new google.maps.Marker({
       position: { lat: initialLat, lng: initialLng },
       map: map,
       draggable: true,
       title: "Drag to mark your house",
     });
-
-    // Add event listeners with error handling
     google.maps.event.addListener(marker, "dragend", () => {
       try {
         const position = marker.getPosition();
@@ -183,7 +272,6 @@ async function initializeMap(initialLat, initialLng) {
         console.error("Frontend - Error in marker dragend event:", error);
       }
     });
-
     map.addListener("click", (event) => {
       try {
         marker.setPosition(event.latLng);
@@ -193,16 +281,11 @@ async function initializeMap(initialLat, initialLng) {
         console.error("Frontend - Error in map click event:", error);
       }
     });
-
-    // Add a listener to detect if the map becomes idle (fully rendered)
     google.maps.event.addListenerOnce(map, "idle", () => {
       console.log("Frontend - Map fully rendered and idle");
     });
-
-    // Add a resize trigger to ensure the map renders correctly if the container changes
     google.maps.event.trigger(map, "resize");
     console.log("Frontend - Map initialized successfully with center:", { lat: initialLat, lng: initialLng });
-
     const results = $("results");
     if (results) {
       results.innerHTML = `
@@ -216,13 +299,12 @@ async function initializeMap(initialLat, initialLng) {
   }
 }
 
-// Address Input Handler to Initialize Map
+// Address Input Handler
 const addressInput = $("address");
 if (addressInput) {
   addressInput.addEventListener("blur", async () => {
     const address = addressInput.value.trim();
     if (!address) return;
-
     try {
       showProgress("Locating address...");
       const addressResponse = await fetch(
@@ -236,15 +318,11 @@ if (addressInput) {
       if (!addressData.length) {
         throw new Error("Invalid address: No results found");
       }
-
       const lat = parseFloat(addressData[0].lat);
       const lon = parseFloat(addressData[0].lon);
-
-      // Load Google Maps API if not already loaded
       if (!isGoogleMapsLoaded) {
         await loadGoogleMapsApi();
       }
-
       await initializeMap(lat, lon);
     } catch (error) {
       console.error("Frontend - Address validation error:", error);
@@ -265,7 +343,6 @@ if (remodelForm) {
       submitButton.disabled = true;
       submitButton.innerHTML = "Processing...";
     }
-
     try {
       const address = $("address")?.value.trim();
       const components = Array.from($("components")?.selectedOptions || []).map(option => option.value);
@@ -277,43 +354,31 @@ if (remodelForm) {
       };
       const windowCount = parseInt($("windowCount")?.value) || 0;
       const doorCount = parseInt($("doorCount")?.value) || 0;
-
-      // Validate Inputs
       if (!address) {
         throw new Error("Please enter a valid address.");
       }
-
       if (components.length === 0) {
         throw new Error("Please select at least one component to estimate (Roof, Windows, Doors, Siding).");
       }
-
       if (components.includes("windows") && (isNaN(windowCount) || windowCount < 0)) {
         throw new Error("Please provide a valid window count (0 or more) when estimating windows.");
       }
-
       if (components.includes("doors") && (isNaN(doorCount) || doorCount < 0)) {
         throw new Error("Please provide a valid door count (0 or more) when estimating doors.");
       }
-
       const totalImages = Object.values(photos).reduce((sum, arr) => sum + arr.length, 0);
       console.log(`Frontend - Total images selected: ${totalImages}`);
-
-      // Warn About Multiple Images
       DIRECTIONS.forEach(direction => {
         if (photos[direction].length > 1) {
           displayWarning(`Multiple images uploaded for ${direction}. Only the first image will be processed for analysis, but all images will be saved.`);
         }
       });
-
-      // Convert Photos to Base64 with Progress Indicator
       showProgress("Processing images...");
       const resolvedPhotos = {};
       for (const direction of DIRECTIONS) {
         resolvedPhotos[direction] = await convertPhotosToBase64(photos[direction], direction);
       }
       console.log("Frontend - Converted photos to base64:", Object.fromEntries(DIRECTIONS.map(dir => [dir, resolvedPhotos[dir].length])));
-
-      // Include userPinLatLng in the request if available
       const requestData = {
         address,
         components,
@@ -322,8 +387,6 @@ if (remodelForm) {
         doorCount,
         userPin: userPinLatLng || null,
       };
-
-      // Send Request to Netlify Function
       showProgress("Generating estimate...");
       console.log("Frontend - Sending request to /.netlify/functions/remodel with data:", requestData);
       const response = await fetch("/.netlify/functions/remodel", {
@@ -331,17 +394,13 @@ if (remodelForm) {
         body: JSON.stringify(requestData),
       });
       console.log("Frontend - Response status:", response.status);
-
       if (!response.ok) {
         const text = await response.text();
         throw new Error(`Server error: ${response.status} - ${text}`);
       }
-
       const result = await response.json();
       console.log("Frontend - Server Response:", result);
       if (result.error) throw new Error(result.error);
-
-      // Process and Display Results
       const remodelId = result.remodelId || "unknown";
       const addressDisplay = result.addressData?.display_name || "Unknown Address";
       const measurements = result.measurements || { width: "N/A", length: "N/A", area: "N/A" };
@@ -356,10 +415,8 @@ if (remodelForm) {
       const satelliteViewImage = result.satelliteViewImage || null;
       const lat = result.addressData?.lat || 0;
       const lon = result.addressData?.lon || 0;
-
       const hasValidCost = costEstimates && typeof costEstimates.totalCostLow === "number" && typeof costEstimates.totalCostHigh === "number" && costEstimates.totalCostLow > 0 && costEstimates.totalCostHigh > 0;
       console.log("Frontend - Cost rendering check:", { isMeasurementsReliable, hasValidCost, costEstimates });
-
       let resultsHtml = `
         <div style="background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); padding: 2rem;" role="region" aria-label="Remodel Estimate Results">
           <h2 style="color: #1a3c34; margin-bottom: 1rem; font-size: 1.8rem; text-align: center;">Remodel Estimate</h2>
@@ -368,18 +425,15 @@ if (remodelForm) {
           <p style="margin: 0.5rem 0;"><strong>Dimensions:</strong> ${measurements.width}ft x ${measurements.length}ft (Area: ${measurements.area} sq ft)</p>
           <p style="margin: 0.5rem 0;"><strong>Height (Est.):</strong> ${roofInfo.height}ft | <strong>Roof Pitch:</strong> ${roofInfo.pitch}</p>
       `;
-
       if (components.includes("windows") || components.includes("doors")) {
         resultsHtml += `
           <p style="margin: 0.5rem 0;"><strong>Windows:</strong> ${components.includes("windows") ? windowDoorCount.windows : "N/A"} | <strong>Doors:</strong> ${components.includes("doors") ? windowDoorCount.doors : "N/A"}</p>
           <p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Window and door dimensions will be measured on-site for accuracy.</p>
         `;
       }
-
       if (!isMeasurementsReliable) {
         resultsHtml += `<p style="color: #d32f2f; font-size: 0.9rem; margin: 0.5rem 0;">Building dimensions are estimates based on ${totalImages === 0 ? "satellite imagery analysis or regional averages" : "your uploaded photos"}. For accurate results, please upload clear photos or verify the dimensions.</p>`;
       }
-
       if (!roofInfo.isPitchReliable && components.includes("roof")) {
         let pitchMessage = "Roof pitch is a default estimate.";
         if (totalImages > 0) pitchMessage = "Roof pitch is a default estimate because the uploaded images could not be processed for analysis.";
@@ -388,13 +442,11 @@ if (remodelForm) {
       } else if (components.includes("roof")) {
         resultsHtml += `<p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Roof pitch estimated from ${roofInfo.pitchSource === "user_image" ? "your uploaded photo" : "default"}.</p>`;
       }
-
       resultsHtml += `
         <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Material Breakdown</h3>
         <ul style="list-style-type: disc; padding-left: 1.5rem; margin-bottom: 1rem;">${materialEstimates.map(item => `<li>${item}</li>`).join("")}</ul>
         <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Cost Estimate (Approximate)</h3>
       `;
-
       if (hasValidCost) {
         resultsHtml += `
           <p style="margin: 0.5rem 0;"><strong>Total:</strong> $${costEstimates.totalCostLow.toLocaleString()}–$${costEstimates.totalCostHigh.toLocaleString()}</p>
@@ -408,7 +460,6 @@ if (remodelForm) {
         resultsHtml += `<p style="color: #d32f2f; margin: 0.5rem 0;">Unable to generate cost estimate due to missing data.</p>`;
         console.log("Frontend - Cost estimate display fallback triggered. hasValidCost:", hasValidCost);
       }
-
       resultsHtml += `
         <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Estimated Timeline</h3>
         <p style="margin: 0.5rem 0;">${timelineEstimate} weeks</p>
@@ -417,7 +468,6 @@ if (remodelForm) {
         <p style="margin: 0.5rem 0;">Remodeling in your area may require permits for structural, electrical, or plumbing work. Contact your local building department.</p>
         <p style="margin: 0.5rem 0;"><a href="https://www.usa.gov/local-building-permits" target="_blank" style="color: #e67e22; text-decoration: none;">Learn More About Permits</a></p>
       `;
-
       let hasUserImages = false;
       DIRECTIONS.forEach(direction => {
         if (processedImages[direction]) {
@@ -441,7 +491,6 @@ if (remodelForm) {
           `;
         }
       });
-
       if (!hasUserImages && satelliteViewImage) {
         resultsHtml += `
           <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Satellite View Image (Google Maps)</h3>
@@ -451,11 +500,9 @@ if (remodelForm) {
           </div>
         `;
       }
-
       if (totalImages > 0) {
         resultsHtml += `<p style="font-style: italic; color: #666; font-size: 0.9rem; margin: 0.5rem 0;">Processed ${Object.values(processedImages).length} user-uploaded image(s) for dimension estimation. Up to 1 image per direction is processed.</p>`;
       }
-
       if (lat && lon) {
         resultsHtml += `
           <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Location Map (Google Maps)</h3>
@@ -468,7 +515,6 @@ if (remodelForm) {
           </div>
         `;
       }
-
       const smsSummary = `Requesting a quote for remodel at ${addressDisplay.split(", ").slice(0, 2).join(", ")}: ${measurements.area}sqft, ${components.map(comp => comp.charAt(0).toUpperCase() + comp.slice(1) + (comp === "windows" ? ` (${windowDoorCount.windows})` : comp === "doors" ? ` (${windowDoorCount.doors})` : "")).join(", ")}, ~$${costEstimates.totalCostLow.toLocaleString()}–$${costEstimates.totalCostHigh.toLocaleString()}.`;
       resultsHtml += `
         <h3 style="color: #1a3c34; margin-bottom: 0.5rem; margin-top: 1.5rem; font-size: 1.3rem;">Next Steps with Indy Home Improvements</h3>
@@ -479,13 +525,10 @@ if (remodelForm) {
         </div>
       </div>
       `;
-
       const results = $("results");
       if (results) {
         results.innerHTML = resultsHtml;
       }
-
-      // Ensure map container is hidden after form submission to prevent conflicts
       const mapContainer = $("mapContainer");
       if (mapContainer) {
         mapContainer.style.display = "none";
@@ -528,7 +571,6 @@ DIRECTIONS.forEach(direction => {
       }
     });
   }
-
   const captureButton = $(`capture${direction.charAt(0).toUpperCase() + direction.slice(1)}`);
   if (captureButton) {
     captureButton.addEventListener("click", async () => {
@@ -538,7 +580,6 @@ DIRECTIONS.forEach(direction => {
         const devices = await navigator.mediaDevices.enumerateDevices();
         const videoDevices = devices.filter(device => device.kind === "videoinput");
         console.log(`Frontend - Available video devices for ${direction}:`, videoDevices);
-
         let backCameraDeviceId = null;
         let frontCameraDeviceId = null;
         for (const device of videoDevices) {
@@ -550,7 +591,6 @@ DIRECTIONS.forEach(direction => {
             frontCameraDeviceId = device.deviceId;
           }
         }
-
         try {
           if (backCameraDeviceId) {
             console.log(`Frontend - Using back camera (deviceId: ${backCameraDeviceId}) for ${direction}`);
@@ -568,7 +608,6 @@ DIRECTIONS.forEach(direction => {
         } catch (backCameraError) {
           console.warn(`Frontend - Back camera unavailable for ${direction}:`, backCameraError);
           isBackCamera = false;
-
           if (frontCameraDeviceId) {
             console.log(`Frontend - Falling back to front camera (deviceId: ${frontCameraDeviceId}) for ${direction}`);
             stream = await navigator.mediaDevices.getUserMedia({
@@ -583,21 +622,17 @@ DIRECTIONS.forEach(direction => {
             });
           }
         }
-
         const track = stream.getVideoTracks()[0];
         const settings = track.getSettings();
         console.log(`Frontend - Camera settings for ${direction}:`, settings);
         if (settings.facingMode === "user" && isBackCamera) {
           isBackCamera = false;
         }
-
         if (!isBackCamera) {
           displayWarning("Using front camera as the back camera is unavailable. Please ensure the photo captures the house exterior.");
         }
-
         const video = createElement("video", { maxWidth: "100%", borderRadius: "4px" }, { autoplay: "", playsinline: "" });
         video.srcObject = stream;
-
         const modal = createElement("div", {
           position: "fixed",
           top: "0",
@@ -610,7 +645,6 @@ DIRECTIONS.forEach(direction => {
           alignItems: "center",
           zIndex: "1000"
         });
-
         const container = createElement("div", {
           background: "white",
           padding: "20px",
@@ -618,7 +652,6 @@ DIRECTIONS.forEach(direction => {
           textAlign: "center"
         });
         container.appendChild(video);
-
         const captureButton = createElement("button", {
           marginTop: "10px",
           padding: "10px 20px",
@@ -630,7 +663,6 @@ DIRECTIONS.forEach(direction => {
         });
         captureButton.innerText = "Capture Photo";
         container.appendChild(captureButton);
-
         const cancelButton = createElement("button", {
           marginTop: "10px",
           marginLeft: "10px",
@@ -643,17 +675,14 @@ DIRECTIONS.forEach(direction => {
         });
         cancelButton.innerText = "Cancel";
         container.appendChild(cancelButton);
-
         modal.appendChild(container);
         document.body.appendChild(modal);
-
         await new Promise(resolve => {
           video.onloadedmetadata = () => {
             video.play();
             resolve();
           };
         });
-
         captureButton.addEventListener("click", () => {
           const canvas = createElement("canvas");
           canvas.width = video.videoWidth;
@@ -661,7 +690,6 @@ DIRECTIONS.forEach(direction => {
           const ctx = canvas.getContext("2d");
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
           const dataUrl = canvas.toDataURL("image/jpeg");
-
           const file = dataURLtoFile(dataUrl, `${direction}_photo.jpg`);
           const fileList = new DataTransfer();
           fileList.items.add(file);
@@ -669,7 +697,6 @@ DIRECTIONS.forEach(direction => {
           if (photoInput) {
             photoInput.files = fileList.files;
           }
-
           const preview = $(`${direction}Preview`);
           if (preview) {
             preview.innerHTML = "";
@@ -681,11 +708,9 @@ DIRECTIONS.forEach(direction => {
             }, { alt: `${direction} captured image`, src: dataUrl });
             preview.appendChild(img);
           }
-
           stream.getTracks().forEach(track => track.stop());
           modal.remove();
         });
-
         cancelButton.addEventListener("click", () => {
           stream.getTracks().forEach(track => track.stop());
           modal.remove();
@@ -702,4 +727,15 @@ DIRECTIONS.forEach(direction => {
       }
     });
   }
+});
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+  initSwiper();
+  const connectBtn = $("connect-btn");
+  const disconnectBtn = $("disconnect-btn");
+  if (connectBtn) connectBtn.addEventListener('click', connectWallet);
+  if (disconnectBtn) disconnectBtn.addEventListener('click', disconnectWallet);
+  const status = $("wallet-status");
+  if (status) status.textContent = 'Connect your wallet for admin access.';
 });
