@@ -26,6 +26,13 @@
 </head>
 <body>
     <div class="overlay"></div>
+    <!-- Admin Buttons Container -->
+    <div class="admin-buttons">
+        <button class="admin-btn" id="connect-btn">Admin</button>
+        <button class="admin-btn disconnect" id="disconnect-btn" style="display: none;">Disconnect</button>
+        <button class="admin-btn" id="admin-panel-btn" style="display: none;">Admin Panel</button>
+        <div id="wallet-status" class="wallet-status"></div>
+    </div>
     <header>
         <div class="services left">
             Interior<br>
@@ -48,10 +55,6 @@
         <p>Call or Text us today: <strong>(765) 366-3344</strong></p>
         <button class="cta-button" onclick="window.location.href='sms:+17653663344'">Contact Us</button>
         <button class="cta-button" onclick="openRemodelTool()">Get a Free Remodel Estimate</button>
-        <button class="cta-button" id="connect-btn">Connect Wallet</button>
-        <button class="cta-button disconnect" id="disconnect-btn" style="display: none;">Disconnect Wallet</button>
-        <button class="cta-button" id="admin-btn" style="display: none;" onclick="window.location.href='/admin.html'">Admin Panel</button>
-        <div id="wallet-status" style="font-size: 16px; margin-top: 10px; color: #fff;"></div>
         <h2>Most Recent Projects</h2>
         <div class="swiper">
             <div class="swiper-wrapper">
