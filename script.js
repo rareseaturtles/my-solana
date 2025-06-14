@@ -128,8 +128,9 @@ async function connectWallet() {
     if (status) status.textContent = `Connected: ${publicKey.slice(0, 6)}...${publicKey.slice(-4)}`;
     const connectBtn = $("connect-btn");
     const disconnectBtn = $("disconnect-btn");
+    const adminPanelBtn = $("admin-panel-btn");
     if (connectBtn) connectBtn.style.display = 'none';
-    if (disconnectBtn) disconnectBtn.style.display = 'block';
+    if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
 
     const adminCheckResponse = await fetch('/.netlify/functions/check-admin', {
       method: 'POST',
@@ -140,8 +141,7 @@ async function connectWallet() {
       throw new Error(`Failed to check admin status: ${adminCheckResponse.statusText}`);
     }
     const { isAdmin } = await adminCheckResponse.json();
-    const adminBtn = $("admin-btn");
-    if (adminBtn) adminBtn.style.display = isAdmin ? 'block' : 'none';
+    if (adminPanelBtn) adminPanelBtn.style.display = isAdmin ? 'inline-block' : 'none';
     if (status && !isAdmin) status.textContent = 'Unauthorized wallet. Admin access denied.';
   } catch (error) {
     console.error('connectWallet: Error:', error.message);
@@ -160,13 +160,13 @@ async function disconnectWallet() {
     publicKey = null;
     isAdmin = false;
     const status = $("wallet-status");
-    if (status) status.textContent = 'Connect your wallet for admin access.';
+    if (status) status.textContent = '';
     const connectBtn = $("connect-btn");
     const disconnectBtn = $("disconnect-btn");
-    const adminBtn = $("admin-btn");
-    if (connectBtn) connectBtn.style.display = 'block';
+    const adminPanelBtn = $("admin-panel-btn");
+    if (connectBtn) connectBtn.style.display = 'inline-block';
     if (disconnectBtn) disconnectBtn.style.display = 'none';
-    if (adminBtn) adminBtn.style.display = 'none';
+    if (adminPanelBtn) adminPanelBtn.style.display = 'none';
   } catch (error) {
     console.error('disconnectWallet: Error:', error.message);
     const status = $("wallet-status");
@@ -734,8 +734,10 @@ document.addEventListener('DOMContentLoaded', () => {
   initSwiper();
   const connectBtn = $("connect-btn");
   const disconnectBtn = $("disconnect-btn");
+  const adminPanelBtn = $("admin-panel-btn");
   if (connectBtn) connectBtn.addEventListener('click', connectWallet);
   if (disconnectBtn) disconnectBtn.addEventListener('click', disconnectWallet);
+  if (adminPanelBtn) adminPanelBtn.addEventListener('click', () => window.location.href = '/admin.html');
   const status = $("wallet-status");
-  if (status) status.textContent = 'Connect your wallet for admin access.';
+  if (status) status.textContent = '';
 });
