@@ -83,6 +83,14 @@ main p {
     background-color: #d35400;
 }
 
+.cta-button.disconnect {
+    background-color: #d32f2f;
+}
+
+.cta-button.disconnect:hover {
+    background-color: #b71c1c;
+}
+
 .image-container {
     margin: 20px auto;
     text-align: center;
