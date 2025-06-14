@@ -20,6 +20,51 @@ body {
     z-index: -1;
 }
 
+/* Admin Buttons Container */
+.admin-buttons {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 1000;
+    display: flex;
+    gap: 5px;
+    align-items: center;
+}
+
+.admin-btn {
+    background-color: #6c757d; /* Neutral gray */
+    color: white;
+    padding: 5px 10px;
+    border: none;
+    border-radius: 4px;
+    font-size: 14px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color 0.3s;
+}
+
+.admin-btn:hover {
+    background-color: #5a6268; /* Darker gray */
+}
+
+.admin-btn.disconnect {
+    background-color: #d32f2f; /* Red for disconnect */
+}
+
+.admin-btn.disconnect:hover {
+    background-color: #b71c1c; /* Darker red */
+}
+
+.wallet-status {
+    font-size: 12px;
+    color: #ffffff;
+    background: rgba(44, 62, 80, 0.8);
+    padding: 5px;
+    border-radius: 4px;
+    max-width: 200px;
+    text-align: right;
+}
+
 /* Header styles */
 header {
     background: rgba(44, 62, 80, 0.8);
@@ -81,14 +126,6 @@ main p {
 
 .cta-button:hover {
     background-color: #d35400;
-}
-
-.cta-button.disconnect {
-    background-color: #d32f2f;
-}
-
-.cta-button.disconnect:hover {
-    background-color: #b71c1c;
 }
 
 .image-container {
@@ -196,5 +233,20 @@ input[type="number"] {
 
     header {
         flex-wrap: wrap;
+    }
+
+    .admin-buttons {
+        flex-direction: column;
+        align-items: flex-end;
+    }
+
+    .admin-btn {
+        font-size: 12px;
+        padding: 4px 8px;
+    }
+
+    .wallet-status {
+        font-size: 10px;
+        max-width: 150px;
     }
 }
