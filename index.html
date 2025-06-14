@@ -6,26 +6,21 @@
     <meta name="description" content="Indy Home Improvements - Expert construction and remodeling services.">
     <meta name="keywords" content="Home Improvements, Construction, Remodeling, Indy">
     <title>Indy Home Improvements</title>
-
     <!-- Favicon -->
     <link rel="icon" href="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png" type="image/x-icon">
-
     <!-- Open Graph Meta Tags -->
     <meta property="og:title" content="Indy Home Improvements">
     <meta property="og:description" content="Expert construction and remodeling services. Call or text us today!">
     <meta property="og:image" content="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png">
     <meta property="og:url" content="https://www.yoursite.com">
     <meta property="og:type" content="website">
-
     <!-- Twitter Card Meta Tags -->
     <meta name="twitter:title" content="Indy Home Improvements">
     <meta name="twitter:description" content="Expert construction and remodeling services. Call or text us today!">
     <meta name="twitter:image" content="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png">
     <meta name="twitter:card" content="summary_large_image">
-
     <!-- Swiper.js Styles -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper/swiper-bundle.min.css">
-
     <!-- Link to external stylesheet -->
     <link rel="stylesheet" href="/styles.css">
 </head>
@@ -53,7 +48,10 @@
         <p>Call or Text us today: <strong>(765) 366-3344</strong></p>
         <button class="cta-button" onclick="window.location.href='sms:+17653663344'">Contact Us</button>
         <button class="cta-button" onclick="openRemodelTool()">Get a Free Remodel Estimate</button>
-
+        <button class="cta-button" id="connect-btn">Connect Wallet</button>
+        <button class="cta-button disconnect" id="disconnect-btn" style="display: none;">Disconnect Wallet</button>
+        <button class="cta-button" id="admin-btn" style="display: none;" onclick="window.location.href='/admin.html'">Admin Panel</button>
+        <div id="wallet-status" style="font-size: 16px; margin-top: 10px; color: #fff;"></div>
         <h2>Most Recent Projects</h2>
         <div class="swiper">
             <div class="swiper-wrapper">
@@ -73,10 +71,8 @@
                     <img src="https://i.ibb.co/LRxKD9L/Screenshot-20250111-234720-Facebook.jpg" alt="Original Image">
                 </div>
             </div>
-
             <!-- Pagination -->
             <div class="swiper-pagination"></div>
-
             <!-- Navigation buttons -->
             <div class="swiper-button-next"></div>
             <div class="swiper-button-prev"></div>
@@ -86,25 +82,11 @@
         <p>© 2025 Indy Home Improvements. All Rights Reserved.</p>
         <a href="https://www.facebook.com/improvingIndiana/" target="_blank">Visit us on Facebook</a>
     </footer>
-
+    <!-- Solana Web3.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.91.1/lib/index.iife.min.js"></script>
     <!-- Swiper.js Script -->
     <script src="https://cdn.jsdelivr.net/npm/swiper/swiper-bundle.min.js"></script>
-    <script>
-        const swiper = new Swiper('.swiper', {
-            loop: true,
-            pagination: {
-                el: '.swiper-pagination',
-                clickable: true,
-            },
-            navigation: {
-                nextEl: '.swiper-button-next',
-                prevEl: '.swiper-button-prev',
-            },
-        });
-
-        function openRemodelTool() {
-            window.location.href = "/remodel-tool";
-        }
-    </script>
+    <!-- External JavaScript -->
+    <script src="/script.js"></script>
 </body>
 </html>
