@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Indy Home Improvements - Window Inspection Admin Panel">
+    <title>Window Inspection Admin</title>
+    <!-- Favicon -->
+    <link rel="icon" href="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png" type="image/x-icon">
+    <!-- Link to external stylesheet -->
+    <link rel="stylesheet" href="/styles.css">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-storage.js"></script>
+    <!-- Solana Web3.js -->
+    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.91.1/lib/index.iife.min.js"></script>
+</head>
+<body>
+    <div class="overlay"></div>
+    <header>
+        <div class="header-content">
+            <img class="header-logo" src="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png" alt="Indy Home Improvements Logo">
+            <div>Window Inspection Admin</div>
+        </div>
+    </header>
+    <main>
+        <div id="wallet-status" style="font-size: 24px; margin-bottom: 20px;">Connect your wallet to access the admin panel.</div>
+        <button class="cta-button" id="connect-btn">Connect Wallet</button>
+        <button class="cta-button disconnect" id="disconnect-btn" style="display: none;">Disconnect Wallet</button>
+        <button class="cta-button" id="back-btn" onclick="window.location.href='/index.html'">Back to Home</button>
+        <div id="admin-content" style="display: none;">
+            <h2>Inspection Jobs</h2>
+            <div id="job-list" style="background: rgba(44, 62, 80, 0.8); padding: 15px; border-radius: 8px; margin: 20px 0; max-height: 200px; overflow-y: auto;"></div>
+            <h2 id="form-title">Add New Job</h2>
+            <form id="inspection-form">
+                <label for="jobName">Job Name</label>
+                <input type="text" id="jobName" required>
+                <label for="location">Location</label>
+                <input type="text" id="location" required>
+                <label for="windowType">Window Type</label>
+                <select id="windowType">
+                    <option value="">Select</option>
+                    <option value="Single-Hung">Single-Hung</option>
+                    <option value="Double-Hung">Double-Hung</option>
+                    <option value="Casement">Casement</option>
+                    <option value="Awning">Awning</option>
+                    <option value="Sliding">Sliding</option>
+                    <option value="Fixed">Fixed</option>
+                    <option value="Bay/Bow">Bay/Bow</option>
+                    <option value="Skylight">Skylight</option>
+                </select>
+                <label for="frameMaterial">Frame Material</label>
+                <select id="frameMaterial">
+                    <option value="">Select</option>
+                    <option value="Wood">Wood</option>
+                    <option value="Vinyl">Vinyl</option>
+                    <option value="Aluminum">Aluminum</option>
+                    <option value="Fiberglass">Fiberglass</option>
+                </select>
+                <label for="glazing">Glazing</label>
+                <select id="glazing">
+                    <option value="">Select</option>
+                    <option value="Single-Pane">Single-Pane</option>
+                    <option value="Double-Pane">Double-Pane</option>
+                    <option value="Triple-Pane">Triple-Pane</option>
+                </select>
+                <label for="panels">Total Panels</label>
+                <input type="number" id="panels">
+                <label for="fixedPanels">Fixed Panels</label>
+                <input type="number" id="fixedPanels">
+                <label for="operablePanels">Operable Panels</label>
+                <input type="number" id="operablePanels">
+                <label for="operation">Operation</label>
+                <select id="operation">
+                    <option value="">Select</option>
+                    <option value="Operable">Operable</option>
+                    <option value="Non-Operable">Non-Operable</option>
+                </select>
+                <label for="frameCondition">Frame Condition</label>
+                <select id="frameCondition">
+                    <option value="">Select</option>
+                    <option value="Intact">Intact</option>
+                    <option value="Rot">Rot</option>
+                    <option value="Cracks">Cracks</option>
+                    <option value="Corrosion">Corrosion</option>
+                    <option value="Peeling Paint">Peeling Paint</option>
+                </select>
+                <label for="weatherstripping">Weatherstripping</label>
+                <select id="weatherstripping">
+                    <option value="">Select</option>
+                    <option value="Intact">Intact</option>
+                    <option value="Worn/Missing">Worn/Missing</option>
+                </select>
+                <label for="caulking">Caulking/Seals</label>
+                <select id="caulking">
+                    <option value="">Select</option>
+                    <option value="Intact">Intact</option>
+                    <option value="Worn/Missing">Worn/Missing</option>
+                </select>
+                <label for="leaks">Leaks</label>
+                <select id="leaks">
+                    <option value="">Select</option>
+                    <option value="None">None</option>
+                    <option value="Water Stains">Water Stains</option>
+                    <option value="Mold">Mold</option>
+                </select>
+                <label for="roughOpeningWidth">Rough Opening Width (in)</label>
+                <input type="number" id="roughOpeningWidth">
+                <label for="roughOpeningHeight">Rough Opening Height (in)</label>
+                <input type="number" id="roughOpeningHeight">
+                <label for="roughOpeningCondition">Rough Opening Condition</label>
+                <select id="roughOpeningCondition">
+                    <option value="">Select</option>
+                    <option value="Intact">Intact</option>
+                    <option value="Water Damage">Water Damage</option>
+                    <option value="Rot">Rot</option>
+                    <option value="Poor Flashing">Poor Flashing</option>
+                </select>
+                <label for="alignment">Alignment</label>
+                <select id="alignment">
+                    <option value="">Select</option>
+                    <option value="Level">Level</option>
+                    <option value="Misaligned">Misaligned</option>
+                </select>
+                <label for="glassCondition">Glass Condition</label>
+                <select id="glassCondition">
+                    <option value="">Select</option>
+                    <option value="Clear">Clear</option>
+                    <option value="Scratched">Scratched</option>
+                    <option value="Cracked">Cracked</option>
+                    <option value="Fogged">Fogged</option>
+                </select>
+                <label for="screens">Screens</label>
+                <select id="screens">
+                    <option value="">Select</option>
+                    <option value="Present">Present</option>
+                    <option value="Missing">Missing</option>
+                    <option value="Damaged">Damaged</option>
+                </select>
+                <label for="recommendations">Recommendations</label>
+                <textarea id="recommendations"></textarea>
+                <label for="images">Images</label>
+                <input type="file" id="images" multiple accept="image/*">
+                <button class="cta-button" type="submit">Save Job</button>
+            </form>
+            <div id="job-details" style="background: rgba(44, 62, 80, 0.8); padding: 15px; border-radius: 8px; margin: 20px 0;"></div>
+        </div>
+    </main>
+    <footer>
+        <p>© 2025 Indy Home Improvements. All Rights Reserved.</p>
+        <a href="https://www.facebook.com/improvingIndiana/" target="_blank">Visit us on Facebook</a>
+    </footer>
+    <script>
+        // Firebase Initialization
+        const firebaseConfig = {
+            apiKey: "{{YOUR_API_KEY}}",
+            authDomain: "turtle-treasure-giveaway.firebaseapp.com",
+            projectId: "turtle-treasure-giveaway",
+            storageBucket: "turtle-treasure-giveaway.appspot.com",
+            messagingSenderId: "{{YOUR_MESSAGING_SENDER_ID}}",
+            appId: "{{YOUR_APP_ID}}"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+        const storage = firebase.storage();
+
+        // DOM Elements
+        const connectBtn = document.getElementById('connect-btn');
+        const disconnectBtn = document.getElementById('disconnect-btn');
+        const statusEl = document.getElementById('wallet-status');
+        const adminContent = document.getElementById('admin-content');
+        const jobList = document.getElementById('job-list');
+        const inspectionForm = document.getElementById('inspection-form');
+        const formTitle = document.getElementById('form-title');
+        const jobDetails = document.getElementById('job-details');
+
+        // App State
+        let publicKey = null;
+        let isAdmin = false;
+        let selectedJobId = null;
+
+        // Wallet Connection
+        async function connectWallet() {
+            let walletProvider = null;
+            if (window.solana && window.solana.isPhantom) walletProvider = window.solana;
+            else if (window.backpack) walletProvider = window.backpack;
+            else if (window.solflare) walletProvider = window.solflare;
+            else {
+                statusEl.innerHTML = 'No wallet detected. Install <a href="https://phantom.app/" target="_blank">Phantom</a>, <a href="https://backpack.app/" target="_blank">Backpack</a>, or <a href="https://solflare.com/" target="_blank">Solflare</a>.';
+                return;
+            }
+            try {
+                const resp = await walletProvider.connect();
+                publicKey = resp.publicKey.toString();
+                if (publicKey.length !== 44 || !/^[1-9A-HJ-NP-Za-km-z]+$/.test(publicKey)) {
+                    throw new Error("Invalid Solana public key format");
+                }
+                if (!solanaWeb3.PublicKey.isOnCurve(new solanaWeb3.PublicKey(publicKey))) {
+                    throw new Error("Invalid Solana public key");
+                }
+                statusEl.textContent = `Connected: ${publicKey.slice(0, 6)}...${publicKey.slice(-4)}`;
+                connectBtn.style.display = 'none';
+                disconnectBtn.style.display = 'block';
+
+                const adminCheckResponse = await fetch('/.netlify/functions/check-admin', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ wallet: publicKey })
+                });
+                if (!adminCheckResponse.ok) {
+                    throw new Error(`Failed to check admin status: ${adminCheckResponse.statusText}`);
+                }
+                const { isAdmin } = await adminCheckResponse.json();
+                if (isAdmin) {
+                    adminContent.style.display = 'block';
+                    fetchJobs();
+                } else {
+                    statusEl.textContent = 'Unauthorized wallet address.';
+                    adminContent.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('connectWallet: Error:', error.message);
+                statusEl.textContent = `Connection failed: ${error.message}`;
+            }
+        }
+
+        async function disconnectWallet() {
+            let walletProvider = null;
+            if (window.solana && window.solana.isPhantom) walletProvider = window.solana;
+            else if (window.backpack) walletProvider = window.backpack;
+            else if (window.solflare) walletProvider = window.solflare;
+            try {
+                if (walletProvider && walletProvider.disconnect) await walletProvider.disconnect();
+                publicKey = null;
+                isAdmin = false;
+                statusEl.textContent = 'Connect your wallet to access the admin panel.';
+                connectBtn.style.display = 'block';
+                disconnectBtn.style.display = 'none';
+                adminContent.style.display = 'none';
+                jobDetails.style.display = 'none';
+                jobList.innerHTML = '';
+            } catch (error) {
+                console.error('disconnectWallet: Error:', error.message);
+                statusEl.textContent = `Disconnection failed: ${error.message}`;
+            }
+        }
+
+        // Fetch Jobs
+        async function fetchJobs() {
+            try {
+                const response = await fetch('/.netlify/functions/get-inspections', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ wallet: publicKey })
+                });
+                if (!response.ok) throw new Error(`Failed to fetch inspections: ${response.statusText}`);
+                const { inspections } = await response.json();
+                jobList.innerHTML = inspections.length === 0
+                    ? '<p>No jobs found.</p>'
+                    : inspections.map(job => `
+                        <div class="job-card" data-id="${job.id}" style="border: 1px solid #f39c12; padding: 10px; margin: 5px 0; cursor: pointer; background: #2c3e50; border-radius: 8px;">
+                            <p><strong>${job.jobName}</strong></p>
+                            <p>${job.location}</p>
+                            <p>${new Date(job.timestamp.seconds * 1000).toLocaleDateString()}</p>
+                        </div>
+                    `).join('');
+                document.querySelectorAll('.job-card').forEach(card => {
+                    card.addEventListener('click', () => viewJob(card.dataset.id));
+                });
+            } catch (error) {
+                console.error('fetchJobs: Error:', error.message);
+                statusEl.textContent = `Error loading jobs: ${error.message}`;
+            }
+        }
+
+        // View Job Details
+        async function viewJob(jobId) {
+            try {
+                const response = await fetch('/.netlify/functions/get-inspections', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ wallet: publicKey })
+                });
+                const { inspections } = await response.json();
+                const job = inspections.find(j => j.id === jobId);
+                if (!job) throw new Error('Job not found');
+
+                selectedJobId = jobId;
+                formTitle.textContent = 'Edit Job';
+                document.getElementById('jobName').value = job.jobName || '';
+                document.getElementById('location').value = job.location || '';
+                document.getElementById('windowType').value = job.windowType || '';
+                document.getElementById('frameMaterial').value = job.frameMaterial || '';
+                document.getElementById('glazing').value = job.glazing || '';
+                document.getElementById('panels').value = job.panels || '';
+                document.getElementById('fixedPanels').value = job.fixedPanels || '';
+                document.getElementById('operablePanels').value = job.operablePanels || '';
+                document.getElementById('operation').value = job.operation || '';
+                document.getElementById('frameCondition').value = job.frameCondition || '';
+                document.getElementById('weatherstripping').value = job.weatherstripping || '';
+                document.getElementById('caulking').value = job.caulking || '';
+                document.getElementById('leaks').value = job.leaks || '';
+                document.getElementById('roughOpeningWidth').value = job.roughOpeningWidth || '';
+                document.getElementById('roughOpeningHeight').value = job.roughOpeningHeight || '';
+                document.getElementById('roughOpeningCondition').value = job.roughOpeningCondition || '';
+                document.getElementById('alignment').value = job.alignment || '';
+                document.getElementById('glassCondition').value = job.glassCondition || '';
+                document.getElementById('screens').value = job.screens || '';
+                document.getElementById('recommendations').value = job.recommendations || '';
+
+                jobDetails.style.display = 'block';
+                jobDetails.innerHTML = `
+                    <h3>Job Details: ${job.jobName}</h3>
+                    <p><strong>Location:</strong> ${job.location}</p>
+                    <p><strong>Window Type:</strong> ${job.windowType || 'N/A'}</p>
+                    <p><strong>Frame Material:</strong> ${job.frameMaterial || 'N/A'}</p>
+                    <p><strong>Glazing:</strong> ${job.glazing || 'N/A'}</p>
+                    <p><strong>Total Panels:</strong> ${job.panels || 'N/A'}</p>
+                    <p><strong>Fixed Panels:</strong> ${job.fixedPanels || 'N/A'}</p>
+                    <p><strong>Operable Panels:</strong> ${job.operablePanels || 'N/A'}</p>
+                    <p><strong>Operation:</strong> ${job.operation || 'N/A'}</p>
+                    <p><strong>Frame Condition:</strong> ${job.frameCondition || 'N/A'}</p>
+                    <p><strong>Weatherstripping:</strong> ${job.weatherstripping || 'N/A'}</p>
+                    <p><strong>Caulking/Seals:</strong> ${job.caulking || 'N/A'}</p>
+                    <p><strong>Leaks:</strong> ${job.leaks || 'N/A'}</p>
+                    <p><strong>Rough Opening Width:</strong> ${job.roughOpeningWidth || 'N/A'} in</p>
+                    <p><strong>Rough Opening Height:</strong> ${job.roughOpeningHeight || 'N/A'} in</p>
+                    <p><strong>Rough Opening Condition:</strong> ${job.roughOpeningCondition || 'N/A'}</p>
+                    <p><strong>Alignment:</strong> ${job.alignment || 'N/A'}</p>
+                    <p><strong>Glass Condition:</strong> ${job.glassCondition || 'N/A'}</p>
+                    <p><strong>Screens:</strong> ${job.screens || 'N/A'}</p>
+                    <p><strong>Recommendations:</strong> ${job.recommendations || 'N/A'}</p>
+                    <h4>Images</h4>
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                        ${job.images && job.images.length > 0
+                            ? job.images.map(url => `<img src="${url}" alt="Job Image" style="max-width: 100px; border-radius: 8px;">`).join('')
+                            : '<p>No images</p>'}
+                    </div>
+                `;
+            } catch (error) {
+                console.error('viewJob: Error:', error.message);
+                statusEl.textContent = `Error loading job details: ${error.message}`;
+            }
+        }
+
+        // Submit Form
+        inspectionForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!isAdmin) {
+                statusEl.textContent = "Unauthorized: Only admin can manage jobs.";
+                return;
+            }
+            try {
+                const imageFiles = document.getElementById('images').files;
+                const imageUrls = [];
+                for (const file of imageFiles) {
+                    const storageRef = storage.ref(`inspections/${Date.now()}_${file.name}`);
+                    await storageRef.put(file);
+                    const url = await storageRef.getDownloadURL();
+                    imageUrls.push(url);
+                }
+                const jobData = {
+                    jobName: document.getElementById('jobName').value,
+                    location: document.getElementById('location').value,
+                    windowType: document.getElementById('windowType').value,
+                    frameMaterial: document.getElementById('frameMaterial').value,
+                    glazing: document.getElementById('glazing').value,
+                    panels: parseInt(document.getElementById('panels').value) || null,
+                    fixedPanels: parseInt(document.getElementById('fixedPanels').value) || null,
+                    operablePanels: parseInt(document.getElementById('operablePanels').value) || null,
+                    operation: document.getElementById('operation').value,
+                    frameCondition: document.getElementById('frameCondition').value,
+                    weatherstripping: document.getElementById('weatherstripping').value,
+                    caulking: document.getElementById('caulking').value,
+                    leaks: document.getElementById('leaks').value,
+                    roughOpeningWidth: parseFloat(document.getElementById('roughOpeningWidth').value) || null,
+                    roughOpeningHeight: parseFloat(document.getElementById('roughOpeningHeight').value) || null,
+                    roughOpeningCondition: document.getElementById('roughOpeningCondition').value,
+                    alignment: document.getElementById('alignment').value,
+                    glassCondition: document.getElementById('glassCondition').value,
+                    screens: document.getElementById('screens').value,
+                    recommendations: document.getElementById('recommendations').value,
+                    images: imageUrls,
+                    timestamp: new Date(),
+                    wallet: publicKey
+                };
+                const response = await fetch('/.netlify/functions/save-inspection', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(jobData)
+                });
+                if (!response.ok) throw new Error(`Failed to save inspection: ${response.statusText}`);
+                statusEl.textContent = "Job saved successfully!";
+                inspectionForm.reset();
+                formTitle.textContent = 'Add New Job';
+                selectedJobId = null;
+                jobDetails.style.display = 'none';
+                fetchJobs();
+            } catch (error) {
+                console.error('submitForm: Error:', error.message);
+                statusEl.textContent = `Error saving job: ${error.message}`;
+            }
+        });
+
+        // Event Listeners
+        connectBtn.addEventListener('click', connectWallet);
+        disconnectBtn.addEventListener('click', disconnectWallet);
+    </script>
+</body>
+</html>
