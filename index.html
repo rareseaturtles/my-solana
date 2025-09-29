@@ -3,22 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Indy Home Improvements - Expert construction and remodeling services.">
-    <meta name="keywords" content="Home Improvements, Construction, Remodeling, Indy">
+    <meta name="description" content="Indy Home Improvements - Expert construction and remodeling services in Indiana.">
+    <meta name="keywords" content="Home Improvements, Construction, Remodeling, Indiana, Siding, Windows, Doors, Bathrooms, Kitchens, Floors">
     <title>Indy Home Improvements</title>
     <!-- Favicon -->
-    <link rel="icon" href="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png" type="image/x-icon">
+    <link rel="icon" href="assets/logo.png" type="image/x-icon">
     <!-- Open Graph Meta Tags -->
     <meta property="og:title" content="Indy Home Improvements">
     <meta property="og:description" content="Expert construction and remodeling services. Call or text us today!">
-    <meta property="og:image" content="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png">
+    <meta property="og:image" content="assets/logo.png">
     <meta property="og:url" content="https://www.yoursite.com">
     <meta property="og:type" content="website">
     <!-- Twitter Card Meta Tags -->
     <meta name="twitter:title" content="Indy Home Improvements">
     <meta name="twitter:description" content="Expert construction and remodeling services. Call or text us today!">
-    <meta name="twitter:image" content="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png">
+    <meta name="twitter:image" content="assets/logo.png">
     <meta name="twitter:card" content="summary_large_image">
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <!-- Swiper.js Styles -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper/swiper-bundle.min.css">
     <!-- Link to external stylesheet -->
@@ -26,67 +30,71 @@
 </head>
 <body>
     <div class="overlay"></div>
-    <!-- Admin Buttons Container -->
-    <div class="admin-buttons">
-        <button class="admin-btn" id="connect-btn">Admin</button>
-        <button class="admin-btn disconnect" id="disconnect-btn" style="display: none;">Disconnect</button>
-        <button class="admin-btn" id="admin-panel-btn" style="display: none;">Admin Panel</button>
-        <div id="wallet-status" class="wallet-status"></div>
-    </div>
     <header>
-        <div class="services left">
-            Interior<br>
-            Bathrooms<br>
-            Kitchens<br>
-            Floors
-        </div>
         <div class="header-content">
-            <img class="header-logo" src="https://i.ibb.co/yN75grp/Screenshot-20250111-230007-Facebook-removebg-preview.png" alt="Indy Home Improvements Logo">
-            <div>and Ying Construction</div>
+            <img class="header-logo" src="assets/logo.png" alt="Indy Home Improvements Logo">
+            <h1>Indy Home Improvements <span>and Ying Construction</span></h1>
         </div>
-        <div class="services right">
-            Exterior<br>
-            Siding<br>
-            Windows & Doors
-        </div>
+        <nav class="services-nav">
+            <div class="services-group">
+                <h3>Interior Services</h3>
+                <ul>
+                    <li>Bathrooms</li>
+                    <li>Kitchens</li>
+                    <li>Floors</li>
+                </ul>
+            </div>
+            <div class="services-group">
+                <h3>Exterior Services</h3>
+                <ul>
+                    <li>Siding</li>
+                    <li>Windows & Doors</li>
+                </ul>
+            </div>
+        </nav>
     </header>
     <main>
-        <p>With years of experience and a commitment to excellence, we bring your vision to life.</p>
-        <p>Call or Text us today: <strong>(765) 366-3344</strong></p>
-        <button class="cta-button" onclick="window.location.href='sms:+17653663344'">Contact Us</button>
-        <button class="cta-button" onclick="openRemodelTool()">Get a Free Remodel Estimate</button>
-        <h2>Most Recent Projects</h2>
-        <div class="swiper">
-            <div class="swiper-wrapper">
-                <div class="swiper-slide">
-                    <img src="https://i.ibb.co/YpCBHQt/20250116-113518.jpg" alt="Main Project Image">
-                </div>
-                <div class="swiper-slide">
-                    <img src="https://i.ibb.co/zHVxZKV/20241218-101306.jpg" alt="Recent Project 1">
-                </div>
-                <div class="swiper-slide">
-                    <img src="https://i.ibb.co/rvsq3gT/20241203-161640.jpg" alt="Recent Project 2">
-                </div>
-                <div class="swiper-slide">
-                    <img src="https://i.ibb.co/CV8pBKk/20250116-182710.jpg" alt="Recent Project 3">
-                </div>
-                <div class="swiper-slide">
-                    <img src="https://i.ibb.co/LRxKD9L/Screenshot-20250111-234720-Facebook.jpg" alt="Original Image">
-                </div>
+        <section class="intro">
+            <h2>Bringing Your Vision to Life</h2>
+            <p>With years of experience and a commitment to excellence, Indy Home Improvements delivers top-tier construction and remodeling services tailored to your needs.</p>
+            <p>Call or Text us today: <strong>(765) 366-3344</strong></p>
+            <div class="cta-buttons">
+                <a href="sms:+17653663344" class="cta-button">Contact Us</a>
+                <button class="cta-button" onclick="openRemodelTool()">Get a Free Remodel Estimate</button>
             </div>
-            <!-- Pagination -->
-            <div class="swiper-pagination"></div>
-            <!-- Navigation buttons -->
-            <div class="swiper-button-next"></div>
-            <div class="swiper-button-prev"></div>
-        </div>
+        </section>
+        <section class="projects">
+            <h2>Our Recent Projects</h2>
+            <div class="swiper">
+                <div class="swiper-wrapper">
+                    <div class="swiper-slide">
+                        <img src="assets/project-main.jpg" alt="Main Project Image">
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="assets/project1.jpg" alt="Recent Project 1">
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="assets/project2.jpg" alt="Recent Project 2">
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="assets/project3.jpg" alt="Recent Project 3">
+                    </div>
+                    <div class="swiper-slide">
+                        <img src="assets/project4.jpg" alt="Original Image">
+                    </div>
+                </div>
+                <!-- Pagination -->
+                <div class="swiper-pagination"></div>
+                <!-- Navigation buttons -->
+                <div class="swiper-button-next"></div>
+                <div class="swiper-button-prev"></div>
+            </div>
+        </section>
     </main>
     <footer>
         <p>© 2025 Indy Home Improvements. All Rights Reserved.</p>
         <a href="https://www.facebook.com/improvingIndiana/" target="_blank">Visit us on Facebook</a>
     </footer>
-    <!-- Solana Web3.js -->
-    <script src="https://cdn.jsdelivr.net/npm/@solana/web3.js@1.91.1/lib/index.iife.min.js"></script>
     <!-- Swiper.js Script -->
     <script src="https://cdn.jsdelivr.net/npm/swiper/swiper-bundle.min.js"></script>
     <!-- External JavaScript -->
