@@ -99,81 +99,6 @@ async function convertPhotosToBase64(photoFiles, direction) {
   return results;
 }
 
-// Wallet Authentication
-let publicKey = null;
-let isAdmin = false;
-
-async function connectWallet() {
-  let walletProvider = null;
-  if (window.solana && window.solana.isPhantom) walletProvider = window.solana;
-  else if (window.backpack) walletProvider = window.backpack;
-  else if (window.solflare) walletProvider = window.solflare;
-  else {
-    const status = $("wallet-status");
-    if (status) {
-      status.innerHTML = 'No wallet detected. Install <a href="https://phantom.app/" target="_blank">Phantom</a>, <a href="https://backpack.app/" target="_blank">Backpack</a>, or <a href="https://solflare.com/" target="_blank">Solflare</a>.';
-    }
-    return;
-  }
-  try {
-    const resp = await walletProvider.connect();
-    publicKey = resp.publicKey.toString();
-    if (publicKey.length !== 44 || !/^[1-9A-HJ-NP-Za-km-z]+$/.test(publicKey)) {
-      throw new Error("Invalid Solana public key format");
-    }
-    if (!solanaWeb3.PublicKey.isOnCurve(new solanaWeb3.PublicKey(publicKey))) {
-      throw new Error("Invalid Solana public key");
-    }
-    const status = $("wallet-status");
-    if (status) status.textContent = `Connected: ${publicKey.slice(0, 6)}...${publicKey.slice(-4)}`;
-    const connectBtn = $("connect-btn");
-    const disconnectBtn = $("disconnect-btn");
-    const adminPanelBtn = $("admin-panel-btn");
-    if (connectBtn) connectBtn.style.display = 'none';
-    if (disconnectBtn) disconnectBtn.style.display = 'inline-block';
-
-    const adminCheckResponse = await fetch('/.netlify/functions/check-admin', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ wallet: publicKey })
-    });
-    if (!adminCheckResponse.ok) {
-      throw new Error(`Failed to check admin status: ${adminCheckResponse.statusText}`);
-    }
-    const { isAdmin } = await adminCheckResponse.json();
-    if (adminPanelBtn) adminPanelBtn.style.display = isAdmin ? 'inline-block' : 'none';
-    if (status && !isAdmin) status.textContent = 'Unauthorized wallet. Admin access denied.';
-  } catch (error) {
-    console.error('connectWallet: Error:', error.message);
-    const status = $("wallet-status");
-    if (status) status.textContent = `Connection failed: ${error.message}`;
-  }
-}
-
-async function disconnectWallet() {
-  let walletProvider = null;
-  if (window.solana && window.solana.isPhantom) walletProvider = window.solana;
-  else if (window.backpack) walletProvider = window.backpack;
-  else if (window.solflare) walletProvider = window.solflare;
-  try {
-    if (walletProvider && walletProvider.disconnect) await walletProvider.disconnect();
-    publicKey = null;
-    isAdmin = false;
-    const status = $("wallet-status");
-    if (status) status.textContent = '';
-    const connectBtn = $("connect-btn");
-    const disconnectBtn = $("disconnect-btn");
-    const adminPanelBtn = $("admin-panel-btn");
-    if (connectBtn) connectBtn.style.display = 'inline-block';
-    if (disconnectBtn) disconnectBtn.style.display = 'none';
-    if (adminPanelBtn) adminPanelBtn.style.display = 'none';
-  } catch (error) {
-    console.error('disconnectWallet: Error:', error.message);
-    const status = $("wallet-status");
-    if (status) status.textContent = `Disconnection failed: ${error.message}`;
-  }
-}
-
 // Swiper Initialization
 function initSwiper() {
   new Swiper('.swiper', {
@@ -185,6 +110,10 @@ function initSwiper() {
     navigation: {
       nextEl: '.swiper-button-next',
       prevEl: '.swiper-button-prev',
+    },
+    autoplay: {
+      delay: 5000,
+      disableOnInteraction: false,
     },
   });
 }
@@ -732,12 +661,4 @@ DIRECTIONS.forEach(direction => {
 // Initialize
 document.addEventListener('DOMContentLoaded', () => {
   initSwiper();
-  const connectBtn = $("connect-btn");
-  const disconnectBtn = $("disconnect-btn");
-  const adminPanelBtn = $("admin-panel-btn");
-  if (connectBtn) connectBtn.addEventListener('click', connectWallet);
-  if (disconnectBtn) disconnectBtn.addEventListener('click', disconnectWallet);
-  if (adminPanelBtn) adminPanelBtn.addEventListener('click', () => window.location.href = '/admin.html');
-  const status = $("wallet-status");
-  if (status) status.textContent = '';
 });
