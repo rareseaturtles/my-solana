@@ -49,9 +49,8 @@ body {
 
 .logo-container {
     display: flex;
-    justify-content: center; /* Center the logos horizontally */
-    align-items: center; /* Center the logos vertically */
-    gap: 20px; /* Space between logos */
+    justify-content: center; /* Center the single logo horizontally */
+    align-items: center; /* Center the single logo vertically */
     margin-bottom: 10px;
 }
 
@@ -59,12 +58,6 @@ body {
     height: 200px; /* Consistent logo size for IHI */
     width: auto;
     margin-bottom: 10px; /* Reduced margin */
-}
-
-.sub-logo {
-    height: 100px; /* 50% of 200px */
-    width: 100px; /* Proportional width to maintain aspect ratio */
-    object-fit: contain; /* Ensures proportional scaling without distortion */
 }
 
 .hero-content h1 {
@@ -220,7 +213,7 @@ footer a:hover {
     .top-cta {
         top: 15px;
         flex-direction: column;
-        gap: 3px; /* Reduced gap */
+        gap: 5px; /* Reduced gap */
     }
 
     .hero-content h1 {
@@ -231,19 +224,8 @@ footer a:hover {
         font-size: 2rem;
     }
 
-    .logo-container {
-        flex-direction: column;
-        gap: 10px;
-    }
-
     .hero-logo {
         height: 150px;
-    }
-
-    .sub-logo {
-        height: 100px; /* 50% of 150px */
-        width: 100px; /* Proportional width */
-        object-fit: contain; /* Ensures proportional scaling */
     }
 
     .projects h2 {
