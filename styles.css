@@ -49,7 +49,8 @@ body {
 
 .logo-container {
     display: flex;
-    justify-content: center;
+    justify-content: center; /* Center the logos horizontally */
+    align-items: center; /* Center the logos vertically */
     gap: 20px; /* Space between logos */
     margin-bottom: 10px;
 }
@@ -61,9 +62,9 @@ body {
 }
 
 .sub-logo {
-    height: 50px; /* 25% of 200px */
-    width: 50px; /* Proportional width to avoid squishing */
-    object-fit: contain; /* Ensures the image scales proportionally without distortion */
+    height: 100px; /* 50% of 200px */
+    width: 100px; /* Proportional width to maintain aspect ratio */
+    object-fit: contain; /* Ensures proportional scaling without distortion */
 }
 
 .hero-content h1 {
@@ -240,8 +241,8 @@ footer a:hover {
     }
 
     .sub-logo {
-        height: 37.5px; /* 25% of 150px */
-        width: 37.5px; /* Proportional width */
+        height: 75px; /* 50% of 150px */
+        width: 75px; /* Proportional width */
         object-fit: contain; /* Ensures proportional scaling */
     }
 
