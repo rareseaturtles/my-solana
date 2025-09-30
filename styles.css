@@ -88,64 +88,68 @@ body {
     color: #e67e22;
 }
 
-/* Header styles */
-header {
-    background: #fff; /* White background for contrast */
-    padding: 40px 20px;
-    text-align: center;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-}
-
-.services-nav {
-    display: flex;
-    justify-content: center;
-    gap: 30px;
-    max-width: 1000px;
-    margin: 0 auto;
-    flex-wrap: wrap;
-}
-
-.services-group {
-    text-align: left;
-    background: #fff;
-    padding: 25px;
-    border-radius: 10px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-    color: #333;
-    flex: 1;
-    min-width: 250px;
-}
-
-.services-group h3 {
-    font-size: 1.4rem;
-    margin-bottom: 15px;
-    text-transform: uppercase;
-    letter-spacing: 1.5px;
-    color: #1a3c34;
-}
-
-.services-group ul {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.services-group li {
-    font-size: 1.1rem;
-    margin-bottom: 10px;
-    transition: color 0.3s ease;
-}
-
-.services-group li:hover {
-    color: #e67e22;
-}
-
 /* Main content */
 main {
     padding: 60px 20px;
     text-align: center;
     max-width: 1200px;
     margin: 0 auto;
+}
+
+/* Projects section (now main focus) */
+.projects {
+    margin-top: 0; /* Remove top margin to emphasize focus */
+}
+
+.projects h2 {
+    font-size: 3rem; /* Larger heading to emphasize */
+    margin: 20px 0 40px;
+    color: #1a3c34;
+    font-weight: 700;
+}
+
+.swiper {
+    width: 100%;
+    max-width: 1200px; /* Wider to showcase projects */
+    margin: 0 auto;
+}
+
+.swiper-slide img {
+    max-width: 100%;
+    height: auto;
+    border-radius: 15px; /* Slightly larger radius for elegance */
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.swiper-slide img:hover {
+    transform: scale(1.05);
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+}
+
+.swiper-pagination-bullet {
+    background: #1a3c34;
+    opacity: 0.8;
+    width: 12px;
+    height: 12px;
+}
+
+.swiper-button-next, .swiper-button-prev {
+    color: #1a3c34;
+    transition: color 0.3s ease;
+}
+
+.swiper-button-next:hover, .swiper-button-prev:hover {
+    color: #e67e22;
+}
+
+/* Intro section (moved below projects) */
+.intro {
+    margin-top: 60px;
+    padding: 40px 20px;
+    background: #fff; /* Light background for contrast */
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
 .intro h2 {
@@ -188,47 +192,6 @@ main {
     transform: translateY(-3px);
 }
 
-/* Projects section */
-.projects h2 {
-    font-size: 2.5rem;
-    margin: 50px 0 30px;
-    color: #1a3c34;
-    font-weight: 700;
-}
-
-.swiper {
-    width: 100%;
-    max-width: 1000px;
-    margin: 0 auto;
-}
-
-.swiper-slide img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 10px;
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.swiper-slide img:hover {
-    transform: scale(1.03);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
-}
-
-.swiper-pagination-bullet {
-    background: #1a3c34;
-    opacity: 0.7;
-}
-
-.swiper-button-next, .swiper-button-prev {
-    color: #1a3c34;
-    transition: color 0.3s ease;
-}
-
-.swiper-button-next:hover, .swiper-button-prev:hover {
-    color: #e67e22;
-}
-
 /* Footer styles */
 footer {
     background-color: #1a3c34;
@@ -268,9 +231,20 @@ footer a:hover {
         height: 150px;
     }
 
-    .services-nav {
-        flex-direction: column;
-        gap: 20px;
+    .projects h2 {
+        font-size: 2.5rem;
+    }
+
+    .swiper {
+        max-width: 100%;
+    }
+
+    .intro h2 {
+        font-size: 2rem;
+    }
+
+    .intro p {
+        font-size: 1.1rem;
     }
 
     .cta-buttons {
@@ -281,13 +255,5 @@ footer a:hover {
     .cta-button {
         width: 100%;
         max-width: 300px;
-    }
-
-    .intro h2, .projects h2 {
-        font-size: 2rem;
-    }
-
-    .intro p {
-        font-size: 1.1rem;
     }
 }
