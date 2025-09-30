@@ -55,7 +55,7 @@ body {
 }
 
 .hero-logo {
-    height: 200px; /* Consistent logo size for IHI */
+    height: 250px; /* Consistent logo size for IHI */
     width: auto;
     margin-bottom: 10px; /* Reduced margin */
 }
