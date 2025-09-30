@@ -61,7 +61,7 @@ body {
 }
 
 .sub-logo {
-    height: 100px; /* Smaller size for Ying sub-logo */
+    height: 50px; /* 25% of 200px for Ying sub-logo */
     width: auto;
 }
 
@@ -239,7 +239,7 @@ footer a:hover {
     }
 
     .sub-logo {
-        height: 75px; /* Smaller sub-logo on mobile */
+        height: 37.5px; /* 25% of 150px for Ying sub-logo on mobile */
     }
 
     .projects h2 {
