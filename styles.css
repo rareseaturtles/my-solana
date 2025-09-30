@@ -196,6 +196,20 @@ footer {
     text-align: center;
     padding: 20px; /* Reduced padding */
     border-top: 5px solid #e67e22;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 10px;
+}
+
+.footer-logo {
+    height: 50px; /* Small logo size for footer */
+    width: auto;
+    margin-bottom: 10px;
+}
+
+footer p {
+    margin: 0;
 }
 
 footer a {
@@ -252,6 +266,10 @@ footer a:hover {
     .cta-button {
         width: 100%;
         max-width: 250px;
+    }
+
+    .footer-logo {
+        height: 40px; /* Slightly smaller on mobile */
     }
 }
 
