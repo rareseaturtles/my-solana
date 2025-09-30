@@ -33,7 +33,7 @@ body {
 
 .top-cta {
     position: absolute;
-    top: 20px; /* Reduced top spacing */
+    top: 120px; /* Increased from 80px to 120px for a more noticeable lower position */
     left: 50%;
     transform: translateX(-50%);
     z-index: 2;
@@ -55,7 +55,7 @@ body {
 }
 
 .hero-logo {
-    height: 250px; /* Consistent logo size for IHI */
+    height: 300px; /* Increased from 250px to 300px for a bigger logo */
     width: auto;
     margin-bottom: 10px; /* Reduced margin */
 }
@@ -225,7 +225,7 @@ footer a:hover {
 /* Responsive styles */
 @media (max-width: 768px) {
     .top-cta {
-        top: 15px;
+        top: 90px; /* Increased from 60px to 90px for mobile */
         flex-direction: column;
         gap: 5px; /* Reduced gap */
     }
@@ -239,7 +239,7 @@ footer a:hover {
     }
 
     .hero-logo {
-        height: 150px;
+        height: 225px; /* Increased from 187.5px to 225px (75% of 300px) */
     }
 
     .projects h2 {
