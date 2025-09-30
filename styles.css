@@ -61,8 +61,9 @@ body {
 }
 
 .sub-logo {
-    height: 50px; /* 25% of 200px for Ying sub-logo */
-    width: auto;
+    height: 50px; /* 25% of 200px */
+    width: 50px; /* Proportional width to avoid squishing */
+    object-fit: contain; /* Ensures the image scales proportionally without distortion */
 }
 
 .hero-content h1 {
@@ -239,7 +240,9 @@ footer a:hover {
     }
 
     .sub-logo {
-        height: 37.5px; /* 25% of 150px for Ying sub-logo on mobile */
+        height: 37.5px; /* 25% of 150px */
+        width: 37.5px; /* Proportional width */
+        object-fit: contain; /* Ensures proportional scaling */
     }
 
     .projects h2 {
