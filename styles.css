@@ -55,9 +55,14 @@ body {
 }
 
 .hero-logo {
-    height: 200px; /* Consistent logo size */
+    height: 200px; /* Consistent logo size for IHI */
     width: auto;
     margin-bottom: 10px; /* Reduced margin */
+}
+
+.sub-logo {
+    height: 100px; /* Smaller size for Ying sub-logo */
+    width: auto;
 }
 
 .hero-content h1 {
@@ -231,6 +236,10 @@ footer a:hover {
 
     .hero-logo {
         height: 150px;
+    }
+
+    .sub-logo {
+        height: 75px; /* Smaller sub-logo on mobile */
     }
 
     .projects h2 {
