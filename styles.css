@@ -12,7 +12,7 @@ body {
 .hero {
     position: relative;
     height: 80vh;
-    background: url('assets/back.jpg') no-repeat center center / cover; /* Updated to use back.jpg */
+    background: url('assets/back.jpg') no-repeat center center / cover; /* Using back.jpg as background */
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -27,7 +27,7 @@ body {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.3); /* Lighter overlay for brightness */
+    background: rgba(0, 0, 0, 0.5); /* Darker overlay for better text contrast */
     z-index: 1;
 }
 
@@ -47,7 +47,7 @@ body {
 }
 
 .hero-logo {
-    height: 150px;
+    height: 200px; /* Larger logo as per your feedback */
     width: auto;
     margin-bottom: 10px;
 }
@@ -75,13 +75,16 @@ body {
 .arrow-down {
     font-size: 2rem;
     margin-top: 20px;
-    color: #ccc;
+    color: #fff;
     cursor: pointer;
     transition: color 0.3s ease;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 50%;
+    padding: 10px;
 }
 
 .arrow-down:hover {
-    color: white;
+    color: #e67e22;
 }
 
 /* Header styles */
@@ -101,6 +104,10 @@ header {
 
 .services-group {
     text-align: left;
+    background: rgba(26, 60, 52, 0.8); /* Semi-transparent dark green for contrast */
+    padding: 20px;
+    border-radius: 8px;
+    color: white;
 }
 
 .services-group h3 {
@@ -108,7 +115,7 @@ header {
     margin-bottom: 10px;
     text-transform: uppercase;
     letter-spacing: 1px;
-    color: #1a3c34;
+    color: #fff;
 }
 
 .services-group ul {
@@ -153,7 +160,7 @@ main {
 }
 
 .cta-button {
-    background-color: #e67e22; /* Vibrant orange */
+    background-color: #8a9a5b; /* Olive green like competitor */
     color: white;
     padding: 15px 30px;
     border: none;
@@ -165,7 +172,7 @@ main {
 }
 
 .cta-button:hover {
-    background-color: #d35400;
+    background-color: #6b7a3b; /* Darker olive on hover */
     transform: translateY(-2px);
 }
 
@@ -204,7 +211,7 @@ main {
 }
 
 .swiper-button-next:hover, .swiper-button-prev:hover {
-    color: #e67e22;
+    color: #8a9a5b;
 }
 
 /* Footer styles */
@@ -213,11 +220,11 @@ footer {
     color: #ffffff;
     text-align: center;
     padding: 20px;
-    border-top: 5px solid #e67e22;
+    border-top: 5px solid #8a9a5b; /* Matching olive border */
 }
 
 footer a {
-    color: #e67e22;
+    color: #8a9a5b;
     text-decoration: none;
     transition: color 0.3s ease;
 }
@@ -257,6 +264,10 @@ footer a:hover {
     }
 
     .hero-logo {
-        height: 120px;
+        height: 150px; /* Adjusted for mobile */
+    }
+
+    .services-group {
+        width: 100%;
     }
 }
