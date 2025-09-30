@@ -220,7 +220,7 @@ footer a:hover {
     .top-cta {
         top: 15px;
         flex-direction: column;
-        gap: 5px; /* Reduced gap */
+        gap: 3px; /* Reduced gap */
     }
 
     .hero-content h1 {
@@ -241,8 +241,8 @@ footer a:hover {
     }
 
     .sub-logo {
-        height: 75px; /* 50% of 150px */
-        width: 75px; /* Proportional width */
+        height: 100px; /* 50% of 150px */
+        width: 100px; /* Proportional width */
         object-fit: contain; /* Ensures proportional scaling */
     }
 
