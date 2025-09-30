@@ -46,167 +46,30 @@ body {
     max-width: 900px;
     padding: 10px; /* Reduced padding */
 }
+/* ... (keep all previous styles, add these to the end) */
+
+/* Logo container for side-by-side display */
+.logo-container {
+    display: flex;
+    justify-content: center;
+    gap: 20px; /* Space between logos */
+    margin-bottom: 10px;
+}
 
 .hero-logo {
-    height: 200px; /* Consistent logo size */
+    height: 150px; /* Consistent size, adjust as needed */
     width: auto;
-    margin-bottom: 10px; /* Reduced margin */
 }
 
-.hero-content h1 {
-    font-size: 3.5rem; /* Larger, bold header */
-    margin: 0;
-    font-weight: 700;
-    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.7);
-}
-
-.hero-content span {
-    font-size: 2rem;
-    font-weight: 400;
-    color: #e0e0e0;
-}
-
-.hero-content h2 {
-    font-size: 2.8rem;
-    margin: 10px 0; /* Reduced margin */
-    text-transform: uppercase;
-    letter-spacing: 3px;
-    text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.7);
-}
-
-/* Main content */
-main {
-    padding: 30px 20px; /* Reduced padding */
-    text-align: center;
-    max-width: 1200px;
-    margin: 0 auto;
-}
-
-/* Projects section (now main focus) */
-.projects {
-    margin-top: 0; /* Remove top margin to emphasize focus */
-}
-
-.projects h2 {
-    font-size: 3rem; /* Larger heading to emphasize */
-    margin: 10px 0 20px; /* Reduced margins */
-    color: #1a3c34;
-    font-weight: 700;
-}
-
-.swiper {
-    width: 100%;
-    max-width: 1200px; /* Wider to showcase projects */
-    margin: 0 auto;
-}
-
-.swiper-slide img {
-    max-width: 100%;
-    height: auto;
-    border-radius: 15px; /* Slightly larger radius for elegance */
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.swiper-slide img:hover {
-    transform: scale(1.05);
-    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
-}
-
-.swiper-pagination-bullet {
-    background: #1a3c34;
-    opacity: 0.8;
-    width: 12px;
-    height: 12px;
-}
-
-.swiper-button-next, .swiper-button-prev {
-    color: #1a3c34;
-    transition: color 0.3s ease;
-}
-
-.swiper-button-next:hover, .swiper-button-prev:hover {
-    color: #e67e22;
-}
-
-/* Intro section (moved below projects) */
-.intro {
-    margin-top: 30px; /* Reduced margin */
-    padding: 20px; /* Reduced padding */
-    background: #fff; /* Light background for contrast */
-    border-radius: 10px;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.intro h2 {
-    font-size: 2.5rem;
-    margin-bottom: 15px; /* Reduced margin */
-    color: #1a3c34;
-    font-weight: 700;
-}
-
-.intro p {
-    font-size: 1.3rem;
-    max-width: 800px;
-    margin: 0 auto 15px; /* Reduced margin */
-    color: #555;
-    line-height: 1.8;
-}
-
-.cta-buttons {
-    display: flex;
-    justify-content: center; /* Center all buttons */
-    gap: 10px; /* Reduced gap between buttons */
-    margin-top: 10px; /* Reduced margin */
-    flex-wrap: wrap; /* Allow wrapping for mobile */
-}
-
-.cta-button {
-    background-color: #1a3c34; /* Dark green for a professional look */
-    color: #fff;
-    padding: 12px 25px; /* Standardized, reduced padding for slick size */
-    border: none;
-    border-radius: 20px; /* Slightly smaller radius for uniformity */
-    font-size: 1.1rem; /* Adjusted for balance */
-    cursor: pointer;
-    text-decoration: none;
-    transition: background-color 0.3s ease, transform 0.2s ease;
-    box-shadow: 0 3px 8px rgba(26, 60, 52, 0.3); /* Reduced shadow */
-    width: 100%; /* Full width for mobile */
-    max-width: 250px; /* Smaller max width for consistency */
-    margin: 5px 0; /* Consistent spacing */
-}
-
-.cta-button:hover {
-    background-color: #0f2c24;
-    transform: translateY(-2px); /* Reduced lift */
-}
-
-/* Footer styles */
-footer {
-    background-color: #1a3c34;
-    color: #ffffff;
-    text-align: center;
-    padding: 20px; /* Reduced padding */
-    border-top: 5px solid #e67e22;
-}
-
-footer a {
-    color: #e67e22;
-    text-decoration: none;
-    transition: color 0.3s ease;
-}
-
-footer a:hover {
-    color: #fff;
-}
-
-/* Responsive styles */
+/* Responsive adjustments */
 @media (max-width: 768px) {
-    .top-cta {
-        top: 15px;
+    .logo-container {
         flex-direction: column;
-        gap: 5px; /* Reduced gap */
+        gap: 10px; /* Reduced gap on mobile */
+    }
+
+    .hero-logo {
+        height: 120px; /* Smaller on mobile */
     }
 
     .hero-content h1 {
@@ -215,41 +78,5 @@ footer a:hover {
 
     .hero-content h2 {
         font-size: 2rem;
-    }
-
-    .hero-logo {
-        height: 150px;
-    }
-
-    .projects h2 {
-        font-size: 2.5rem;
-    }
-
-    .swiper {
-        max-width: 100%;
-    }
-
-    .intro h2 {
-        font-size: 2rem;
-    }
-
-    .intro p {
-        font-size: 1.1rem;
-    }
-
-    .cta-buttons {
-        flex-direction: column;
-        gap: 5px; /* Reduced gap */
-    }
-
-    .cta-button {
-        width: 100%;
-        max-width: 250px;
-    }
-}
-
-@media (min-width: 769px) {
-    .cta-button {
-        width: auto; /* Revert to auto width on desktop */
     }
 }
