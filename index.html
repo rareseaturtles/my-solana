@@ -27,8 +27,41 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper/swiper-bundle.min.css">
     <!-- Link to external stylesheet -->
     <link rel="stylesheet" href="/styles.css">
+    <style>
+        body { font-family: 'Roboto', sans-serif; color: #333; background: #f9f9f9; margin: 0; line-height: 1.6; }
+        section { padding: 60px 20px; text-align: center; }
+        h1, h2, h3 { font-weight: 700; text-transform: uppercase; }
+        h1 { font-size: 3em; margin-bottom: 10px; }
+        h2 { font-size: 2.5em; margin-bottom: 30px; }
+        p { max-width: 800px; margin: 0 auto 20px; }
+        ul { list-style: none; padding: 0; max-width: 800px; margin: 0 auto; text-align: left; }
+        ul li { margin-bottom: 10px; }
+        ul li:before { content: '✦ '; color: #007bff; font-weight: bold; }
+        .cta-button { background: #007bff; color: white; padding: 15px 30px; border-radius: 5px; text-decoration: none; font-weight: bold; display: inline-block; margin: 20px 0; }
+        .cta-button:hover { background: #0056b3; }
+        .process-step { text-align: left; max-width: 800px; margin: 0 auto 40px; }
+        .process-step h3 { font-size: 1.5em; margin-bottom: 10px; }
+        .faq { max-width: 800px; margin: 0 auto; text-align: left; }
+        .faq details { margin-bottom: 20px; border-bottom: 1px solid #ddd; padding-bottom: 10px; }
+        .faq summary { font-weight: bold; cursor: pointer; font-size: 1.2em; }
+        .testimonial { max-width: 800px; margin: 0 auto 40px; font-style: italic; }
+        footer { background: #333; color: white; padding: 40px 20px; text-align: center; }
+        footer a { color: #fff; text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
+        .hero { position: relative; background: url('assets/hero-bg.jpg') no-repeat center/cover; color: white; padding: 150px 20px; }
+        .hero .overlay { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); }
+        .hero-content { position: relative; z-index: 1; }
+        .swiper { max-width: 1000px; margin: 40px auto; }
+        .swiper-slide img { width: 100%; height: auto; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .reels-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; max-width: 1200px; margin: 0 auto; }
+        .reels-grid a { display: block; background: #fff; padding: 15px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-decoration: none; color: #333; }
+        .reels-grid a:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+        .reels-grid h4 { margin: 0 0 10px; font-size: 1.1em; }
+        .reels-grid p { font-size: 0.9em; color: #666; margin: 0; }
+    </style>
 </head>
 <body>
+    <!-- Hero Section -->
     <section class="hero">
         <div class="overlay"></div>
         <div class="top-cta">
@@ -38,55 +71,142 @@
             <div class="logo-container">
                 <img class="hero-logo" src="assets/logo-ihi.png" alt="IHI - Indy Home Improvements Logo">
             </div>
-            <h1><span>Ying Construction</span></h1>
-            <h2>KITCHEN. BATH. EXTERIOR. REMODEL.</h2>
+            <h1>Ying Construction — Built Right</h1>
+            <h2>Kitchen • Bath • Exterior • Remodel</h2>
+            <p>Over 25 Years of Experience Serving Indiana. Licensed & Insured • Owner Involved • Precision Craftsmanship.</p>
+            <a href="#contact" class="cta-button">Get a Free Estimate</a>
         </div>
     </section>
-    <main>
-        <section class="projects">
-            <h2>Our Recent Projects</h2>
-            <div class="swiper">
-                <div class="swiper-wrapper">
-                    <div class="swiper-slide">
-                        <img src="assets/project-main.jpg" alt="Main Project Image">
-                    </div>
-                    <div class="swiper-slide">
-                        <img src="assets/project1.jpg" alt="Recent Project 1">
-                    </div>
-                    <div class="swiper-slide">
-                        <img src="assets/project2.jpg" alt="Recent Project 2">
-                    </div>
-                    <div class="swiper-slide">
-                        <img src="assets/project3.jpg" alt="Recent Project 3">
-                    </div>
-                    <div class="swiper-slide">
-                        <img src="assets/project4.jpeg" alt="Original Image">
-                    </div>
-                </div>
-                <!-- Pagination -->
-                <div class="swiper-pagination"></div>
-                <!-- Navigation buttons -->
-                <div class="swiper-button-next"></div>
-                <div class="swiper-button-prev"></div>
+
+    <!-- Services Section -->
+    <section class="services" id="services">
+        <h2>✦ What We Build</h2>
+        <p>Expert residential remodeling and construction tailored to your vision, with a focus on quality and detail.</p>
+        <ul>
+            <li>Kitchen Remodeling: Modern, functional designs using high-quality materials.</li>
+            <li>Bathroom Remodeling: Stylish updates for comfort and efficiency.</li>
+            <li>Exterior Services: Siding, windows, doors to boost curb appeal and energy savings.</li>
+            <li>Whole-Home Remodels & Additions: Including sunrooms, porches & more.</li>
+        </ul>
+        <a href="#projects" class="cta-button">View Projects</a>
+    </section>
+
+    <!-- Projects Section -->
+    <section class="projects" id="projects">
+        <h2>✦ Featured Projects</h2>
+        <p>Real work from right here in Indiana. Swipe or tap to see more — including the gorgeous new bathrooms and sunroom we just added. Check our Facebook for full before/after stories: <a href="https://www.facebook.com/improvingIndiana/" target="_blank">Facebook Page</a> or this <a href="https://www.facebook.com/share/18FEcKwRmj/" target="_blank">recent post</a>.</p>
+        
+        <div class="swiper">
+            <div class="swiper-wrapper">
+                <div class="swiper-slide"><img src="assets/project-main.jpg" alt="Main Project Image"></div>
+                <div class="swiper-slide"><img src="assets/project1.jpg" alt="Recent Project 1"></div>
+                <div class="swiper-slide"><img src="assets/project2.jpg" alt="Recent Project 2"></div>
+                <div class="swiper-slide"><img src="assets/project3.jpg" alt="Recent Project 3"></div>
+                <div class="swiper-slide"><img src="assets/project4.jpeg" alt="Original Image"></div>
+                <div class="swiper-slide"><img src="assets/bathroom-double-vanity.jpg" alt="Luxury Double Vanity Bathroom Remodel with Marble and Brass"></div>
+                <div class="swiper-slide"><img src="assets/bathroom-shower-tub.jpg" alt="Modern Bathroom with Freestanding Tub, Walk-In Shower & Brass Fixtures"></div>
+                <div class="swiper-slide"><img src="assets/sunroom-addition.jpg" alt="Beautiful Sunroom Addition with Tongue-and-Groove Ceiling and LED Lighting"></div>
             </div>
-        </section>
-        <section class="intro">
-            <h2>Bringing Your Vision to Life</h2>
-            <p>With years of experience and a commitment to excellence, Indy Home Improvements and Ying Construction deliver top-tier construction and remodeling services tailored to your needs.</p>
-            <p>Call or Text us today: <strong>(765) 366-3344</strong></p>
-            <div class="cta-buttons">
-                <a href="sms:+17653663344" class="cta-button">Contact Us</a>
-                <button class="cta-button" onclick="openRemodelTool()">Get a Free Remodel Estimate</button>
-            </div>
-        </section>
-    </main>
+            <div class="swiper-pagination"></div>
+            <div class="swiper-button-next"></div>
+            <div class="swiper-button-prev"></div>
+        </div>
+    </section>
+
+    <!-- Process Section -->
+    <section class="process">
+        <h2>✦ How We Get It Done</h2>
+        <div class="process-step">
+            <h3>1. Consultation & Planning</h3>
+            <p>We discuss your vision, assess your space, and provide expert advice.</p>
+        </div>
+        <div class="process-step">
+            <h3>2. Design & Selections</h3>
+            <p>Collaborate on designs, materials, and timelines to fit your needs.</p>
+        </div>
+        <div class="process-step">
+            <h3>3. Build & Execution</h3>
+            <p>Skilled craftsmanship with regular updates throughout the project.</p>
+        </div>
+        <div class="process-step">
+            <h3>4. Final Walkthrough</h3>
+            <p>Ensure everything meets your expectations with a thorough review.</p>
+        </div>
+        <a href="#contact" class="cta-button">Start Your Project</a>
+    </section>
+
+    <!-- Testimonials Section -->
+    <section class="testimonials">
+        <h2>✦ What Our Clients Say</h2>
+        <div class="testimonial">
+            <p>"Beautiful!"</p>
+            <p>— Luann Lieurance</p>
+        </div>
+        <p>See more on our <a href="https://www.facebook.com/improvingIndiana/" target="_blank">Facebook page</a>.</p>
+    </section>
+
+    <!-- FAQs Section -->
+    <section class="faqs">
+        <h2>✦ Frequently Asked Questions</h2>
+        <div class="faq">
+            **Summary:**
+What areas do you serve?
+                <p>Indianapolis and surrounding areas in Indiana.</p>
+            **Summary:**
+How long does a remodel take?
+                <p>Timelines vary by project size, but we give clear estimates upfront.</p>
+            **Summary:**
+Are you licensed and insured?
+                <p>Yes, fully licensed and insured.</p>
+            **Summary:**
+Do you offer free estimates?
+                <p>Absolutely! Call or text us today.</p>
+        </div>
+    </section>
+
+    <!-- Reels Section: Links to Facebook Reels -->
+    <section class="reels" id="reels">
+        <h2>✦ Watch Our Reels</h2>
+        <p>Check out these short videos showcasing our latest home improvement projects and tips. Click to view on Facebook.</p>
+        <div class="reels-grid">
+            <a href="https://www.facebook.com/reel/2396209187563896/" target="_blank">
+                <h4>Home Improvement Q&A</h4>
+                <p>Answers to your common questions about remodeling and construction.</p>
+            </a>
+            <a href="https://www.facebook.com/reel/1930533630896407/" target="_blank">
+                <h4>Bathroom Transformation</h4>
+                <p>From 90s style to modern 2026 aesthetic, featuring a freestanding tub and marble vanity.</p>
+            </a>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section class="contact" id="contact">
+        <h2>✦ Ready to Remodel?</h2>
+        <p>Call or text (765) 366-3344 or email ryan@indyhomeimprovements.com</p>
+        <div class="cta-buttons">
+            <a href="tel:+17653663344" class="cta-button">Call Now</a>
+            <a href="sms:+17653663344" class="cta-button">Text Us</a>
+            <button class="cta-button" onclick="openRemodelTool()">Get Free Estimate</button>
+        </div>
+    </section>
+
     <footer>
         <img class="footer-logo" src="assets/logo-footer.jpg" alt="IHI - Indy Home Improvements Footer Logo">
         <p>© 2025 Indy Home Improvements. All Rights Reserved.</p>
         <a href="https://www.facebook.com/improvingIndiana/" target="_blank">Visit us on Facebook</a>
     </footer>
+
     <!-- Swiper.js Script -->
     <script src="https://cdn.jsdelivr.net/npm/swiper/swiper-bundle.min.js"></script>
+    <script>
+        const swiper = new Swiper('.swiper', {
+            loop: true,
+            pagination: { el: '.swiper-pagination', clickable: true },
+            navigation: { nextEl: '.swiper-button-next', prevEl: '.swiper-button-prev' },
+            autoplay: { delay: 4000, disableOnInteraction: false }
+        });
+    </script>
     <!-- External JavaScript -->
     <script src="/script.js"></script>
 </body>
